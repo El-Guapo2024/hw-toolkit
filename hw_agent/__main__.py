@@ -1,3 +1,3 @@
 """Allow running as: python -m hw_agent <command>"""
-from hw_agent.investigator import main
+from hw_agent.core.investigator import main
 main()
