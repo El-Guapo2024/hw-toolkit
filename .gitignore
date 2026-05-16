@@ -22,3 +22,17 @@ node_modules/
 *.lck
 *-backups/
 _autosave-*
+
+# hw_agent runtime / ephemeral
+hw_agent/.state.json
+hw_agent/.live/
+.claude/scheduled_tasks.lock
+
+# generated artifacts (regenerable)
+docs/projects/*/render/
+
+# packaging
+*.egg-info/
+
+# sub-agent test scratch projects
+docs/projects/test_*/

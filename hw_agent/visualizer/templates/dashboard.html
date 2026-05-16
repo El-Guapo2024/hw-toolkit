@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}dashboard · hardware-agent{% endblock %}
+{% block content %}
+
+<header class="page-header">
+  <h2>dashboard</h2>
+  <div class="meta">project=<strong>{{ state.project }}</strong> · stage=<strong>{{ state.stage }}</strong></div>
+</header>
+
+<section class="grid-2">
+  <div class="card">
+    <h3>spec summary</h3>
+    {% if state.spec_summary %}
+      <table class="table">
+        {% for mpn in state.spec_summary.locked_mpns %}
+          <tr><td>{{ mpn }}</td></tr>
+        {% endfor %}
+      </table>
+      <p class="meta">
+        rails to pick: {{ state.spec_summary.rails_to_pick | join(", ") }}<br>
+        drivers to pick: {{ state.spec_summary.drivers_to_pick | join(", ") }}
+      </p>
+    {% else %}
+      <p class="empty">no spec yet — run /spec</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h3>rail targets</h3>
+    {% if state.spec_summary and state.spec_summary.rail_targets %}
+      <table class="table">
+        {% for k, v in state.spec_summary.rail_targets.items() %}
+          <tr><th>{{ k }}</th><td>{{ v }}</td></tr>
+        {% endfor %}
+      </table>
+    {% else %}
+      <p class="empty">—</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="card">
+  <h3>subsystems with agent data</h3>
+  {% if subsystems %}
+    <ul>
+      {% for s in subsystems %}
+        <li><a href="/designer/{{ state.project }}/{{ s }}">{{ s }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">no agent-written data yet. parts-finder will populate when /designer runs.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h3>cached datasheets</h3>
+  {% if datasheets %}
+    <ul>
+      {% for ds in datasheets %}
+        <li><a href="{{ ds.path }}" target="_blank">{{ ds.name }}.pdf</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">no datasheets cached</p>
+  {% endif %}
+</section>
+
+{% endblock %}
