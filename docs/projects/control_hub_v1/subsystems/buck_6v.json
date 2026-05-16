@@ -1,0 +1,24 @@
+{
+  "subsystem": "buck_6v",
+  "purpose": "11.1V (3S Li-ion) -> 6V motor rail, >=4A continuous, ~6A peak",
+  "part": {
+    "mpn": "TPS54620RHLR",
+    "manufacturer": "Texas Instruments",
+    "topology": "synchronous buck, internal FETs",
+    "package": "VQFN-14-EP (3.5x3.5 mm, exposed pad)",
+    "vin_range_v": [4.5, 17],
+    "iout_continuous_a": 6,
+    "fsw_mhz": 1.6,
+    "vout_adjustable_v": [0.8, 15],
+    "efficiency_typical_pct_at_load": "~90% @ 11V->6V, 4A",
+    "features": ["OCP", "soft-start", "cycle-by-cycle current limit", "frequency sync"]
+  },
+  "sourcing": {
+    "jlc_part": "C263274",
+    "jlc_stock": 10370,
+    "price_1pc_usd": 0.98
+  },
+  "vout_setpoint_v": 6.0,
+  "runner_ups": ["TPS564201DDCR (C464812, 4A, SOT-23-6, $0.30)", "LMR51450SDRRR (C6890985, 36V Vin)"],
+  "notes": "Feedback divider needed (Vref 0.8V). Will compute R1/R2 in design phase. Inductor + Cout sizing via designer-mcp calc_buck_inductor / calc_buck_output_cap once Fsw confirmed."
+}

@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/hw_router_service/__init__.py
+src/hw_router_service/__main__.py
+src/hw_router_service/routing.py
+src/hw_router_service/server.py
+src/hw_router_service.egg-info/PKG-INFO
+src/hw_router_service.egg-info/SOURCES.txt
+src/hw_router_service.egg-info/dependency_links.txt
+src/hw_router_service.egg-info/entry_points.txt
+src/hw_router_service.egg-info/requires.txt
+src/hw_router_service.egg-info/top_level.txt

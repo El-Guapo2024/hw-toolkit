@@ -1,0 +1,91 @@
+# hw-router-service — single-command deploy.
+#
+# Run:
+#     cd hw-router-service
+#     docker compose up --build
+#
+# Then POST DSN to http://localhost:8000/jobs
+#
+# Three services:
+#   - redis   : RQ job queue + result store
+#   - api     : FastAPI, enqueues jobs and serves status
+#   - worker  : runs `rq worker router`, executes FreeRouting subprocesses
+#
+# Both api and worker share a `jobs` volume for DSN / SES / log files
+# (so the API can read what the worker wrote without piping huge blobs
+# through Redis).
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build: .
+    image: hw-router-service:0.1.0
+    command: ["hw-router-service"]
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      JOB_DATA_DIR: /data/jobs
+      JOB_TIMEOUT: "1800"
+      LOG_LEVEL: info
+    ports:
+      # Host port 8002 → container port 8000. 8000 is commonly taken
+      # by other dev backends; 8002 is the freight-flow-ai default for
+      # this service. Override with HW_ROUTER_PORT in .env if you need.
+      - "${HW_ROUTER_PORT:-8002}:8000"
+    volumes:
+      - jobs:/data/jobs
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    image: hw-router-service:0.1.0
+    build: .
+    command: ["rq", "worker", "router", "--url", "redis://redis:6379/0"]
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      JOB_DATA_DIR: /data/jobs
+    volumes:
+      - jobs:/data/jobs
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    # Override the image's API healthcheck — worker has no HTTP server.
+    # Liveness check: the worker is registered with the `router` queue
+    # in Redis. python:3.12-slim doesn't ship pgrep/ps, so we use a
+    # Python one-liner via the rq library that's already installed.
+    healthcheck:
+      test:
+        - "CMD"
+        - "python3"
+        - "-c"
+        - |
+          import os, sys
+          from redis import Redis
+          from rq import Worker
+          conn = Redis.from_url(os.environ['REDIS_URL'])
+          workers = Worker.all(connection=conn)
+          if any('router' in w.queue_names() for w in workers):
+              sys.exit(0)
+          sys.exit(1)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  redis-data:
+  jobs:

@@ -1,0 +1,102 @@
+{
+  "name": "stepper_driver",
+  "requirements": {
+    "channels": 1,
+    "current_per_phase": 1.0,
+    "motor_voltage": 11.1,
+    "microstepping": 16,
+    "control_interface": "step_dir",
+    "ambient_c": 40.0,
+    "allowed_packages": [
+      "TSSOP-16-EP",
+      "QFN",
+      "DFN",
+      "HTSSOP-28"
+    ]
+  },
+  "actuals": {
+    "channels": 1,
+    "iout_per_ch": 2.0,
+    "ipeak": 2.0,
+    "vm_min": 4.75,
+    "vm_max": 29.0,
+    "microstep_max": 256,
+    "rdson_mohm": 340.0,
+    "ilim_method": "sense_resistor",
+    "has_thermal_pad": true,
+    "interfaces": [
+      "step_dir",
+      "uart"
+    ],
+    "theta_ja": null,
+    "package": "QFN-28-EP(5x5)",
+    "stock": 17750
+  },
+  "chosen_part": {
+    "lcsc": "C2150710",
+    "mpn": "TMC2209-LA-T",
+    "manufacturer": "TRINAMIC Motion Control GmbH",
+    "description": "",
+    "package": "QFN-28-EP(5x5)",
+    "price": 2.6837,
+    "price_tiers": {},
+    "stock": 17750,
+    "datasheet_url": "",
+    "library_type": "extended",
+    "qty_per_board": 1,
+    "notes": ""
+  },
+  "decisions": [
+    {
+      "timestamp": "2026-05-12T05:30:03+00:00",
+      "chosen": {
+        "lcsc": "C2150710",
+        "mpn": "TMC2209-LA-T",
+        "manufacturer": "TRINAMIC Motion Control GmbH",
+        "description": "",
+        "package": "QFN-28-EP(5x5)",
+        "price": 2.6837,
+        "price_tiers": {},
+        "stock": 17750,
+        "datasheet_url": "",
+        "library_type": "extended",
+        "qty_per_board": 1,
+        "notes": ""
+      },
+      "rejected": [
+        {
+          "lcsc": "C86252",
+          "mpn": "DRV8824PWPR",
+          "reason": "Cheaper ($1.00) but lower output current (1.6A), no UART, less feature-rich for teaching use case. Kept as fallback option."
+        },
+        {
+          "lcsc": "C81582",
+          "mpn": "DRV8825PWPR",
+          "reason": "Mid-tier price ($2.04), higher current (2.5A), but lacks UART and quiet modes. TMC2209 UART + StealthChop justify the $0.64 premium."
+        }
+      ],
+      "rationale": "TMC2209 selected for UART support (enables dynamic current setting from MCU firmware \u2014 excellent for teaching), highest microstepping (256 = smooth motion at slow precise lead-screw speeds), and built-in StealthChop PWM mode (quiet operation near students). Exceeds all hard requirements: VM 4.75\u201329V covers 11.1V 3S Li-ion, 2A per-channel handles 1A typical + margin, 256 microsteps far exceeds \u226516 preference.",
+      "tradeoffs": [
+        "1% cost premium over DRV8824 for UART dynamic current control and StealthChop quiet operation \u2014 justified for classroom teaching environment."
+      ],
+      "accepted_warnings": [],
+      "alternate_lcsc": "",
+      "requirements_snapshot": {
+        "channels": 1,
+        "current_per_phase": 1.0,
+        "motor_voltage": 11.1,
+        "microstepping": 16,
+        "control_interface": "step_dir",
+        "ambient_c": 40.0,
+        "allowed_packages": [
+          "TSSOP-16-EP",
+          "QFN",
+          "DFN",
+          "HTSSOP-28"
+        ]
+      }
+    }
+  ],
+  "candidates_examined": [],
+  "category": "stepper_driver"
+}

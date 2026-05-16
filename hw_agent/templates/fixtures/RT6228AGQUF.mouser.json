@@ -1,0 +1,33 @@
+{
+  "results": [
+    {
+      "source": "mouser",
+      "part_number": "835-RT6228AGQUF",
+      "mfr_part_number": "RT6228AGQUF",
+      "manufacturer": "Richtek",
+      "description": "Switching Voltage Regulators 8A, 23V Synchronous Step-Down Converter with 3.3V/5V LDO",
+      "category": "Switching Voltage Regulators",
+      "stock": 1418,
+      "price": 2.4,
+      "price_breaks": [
+        {"qty": 1, "price": 2.4, "currency": "USD"},
+        {"qty": 10, "price": 2.36, "currency": "USD"},
+        {"qty": 25, "price": 2.18, "currency": "USD"},
+        {"qty": 1000, "price": 1.29, "currency": "USD"},
+        {"qty": 1500, "price": 1.22, "currency": "USD"},
+        {"qty": 3000, "price": 1.2, "currency": "USD"}
+      ],
+      "datasheet_url": "",
+      "product_url": "https://www.mouser.ca/ProductDetail/Richtek/RT6228AGQUF?qs=amGC7iS6iy9Xb%2FAqb9shQw%3D%3D",
+      "rohs": "RoHS Compliant",
+      "lifecycle": "Active",
+      "parameters": {
+        "Packaging": "Cut Tape",
+        "Standard Pack Qty": "1500"
+      },
+      "min_qty": 1,
+      "currency": "USD"
+    }
+  ],
+  "total": 1
+}

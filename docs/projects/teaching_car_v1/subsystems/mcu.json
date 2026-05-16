@@ -1,0 +1,192 @@
+{
+  "name": "mcu",
+  "requirements": {
+    "wireless": [
+      "wifi",
+      "ble"
+    ],
+    "pwm_channels": 6,
+    "i2c_buses": 1,
+    "spi_needed": false,
+    "uart_count": 2,
+    "adc_channels": 2,
+    "gpio_total": 25,
+    "clock_min": 80.0,
+    "flash_min": 1024,
+    "ram_min": 256,
+    "vdd": 3.3,
+    "allowed_packages": [
+      "QFN",
+      "WLCSP",
+      "BGA",
+      "VFQFN"
+    ]
+  },
+  "actuals": {
+    "core": "Xtensa Dual-Core 32-bit LX7",
+    "clock_mhz": 240.0,
+    "flash_kb": 16384,
+    "ram_kb": 512,
+    "gpio_count": 45,
+    "pwm_channels": 8,
+    "i2c_count": 2,
+    "spi_count": 4,
+    "uart_count": 3,
+    "adc_channels": 20,
+    "usb_type": "usb_otg",
+    "ble_version": "5.0",
+    "wifi": "wifi4",
+    "vdd_min": 3.0,
+    "vdd_max": 3.6,
+    "package": "SMD-41 Module 18x25.5mm",
+    "stock": 11044
+  },
+  "chosen_part": {
+    "lcsc": "C2913202",
+    "mpn": "ESP32-S3-WROOM-1-N16R8",
+    "manufacturer": "Espressif Systems",
+    "description": "",
+    "package": "SMD-41 Module 18x25.5mm",
+    "price": 4.92,
+    "price_tiers": {},
+    "stock": 11044,
+    "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf",
+    "library_type": "extended",
+    "qty_per_board": 1,
+    "notes": ""
+  },
+  "decisions": [
+    {
+      "timestamp": "2026-05-12T05:29:19+00:00",
+      "chosen": {
+        "lcsc": "C701343",
+        "mpn": "ESP32-WROOM-32E-N16",
+        "manufacturer": "Espressif Systems",
+        "description": "",
+        "package": "SMD, 25.5x18mm",
+        "price": 4.657,
+        "price_tiers": {},
+        "stock": 21549,
+        "datasheet_url": "https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_Espressif-Systems-ESP32-WROOM-32E-N16_C701343.pdf",
+        "library_type": "extended",
+        "qty_per_board": 1,
+        "notes": ""
+      },
+      "rejected": [
+        {
+          "lcsc": "C2934560",
+          "mpn": "ESP32-C3-WROOM-02-N4",
+          "reason": "GPIO count 22 < 25 required (BLOCKED on hard constraint)"
+        },
+        {
+          "lcsc": "C2913202",
+          "mpn": "ESP32-S3-WROOM-1-N16R8",
+          "reason": "Stock 9,539 vs 21,549 (PASS), 3x cost ($4.92 vs $4.66), and BLE 5.0 not needed (prefer cheaper first-pass)"
+        },
+        {
+          "lcsc": "C701342",
+          "mpn": "ESP32-WROOM-32E-N8",
+          "reason": "Stock 17,955, flash 2 MB vs 4 MB \u2014 choose N16 for headroom at same price tier"
+        }
+      ],
+      "rationale": "Highest stock (21.5k units), proven ecosystem. Dual-core LX6 240 MHz with 4 MB internal flash (N16 adds 16 MB external SPI). PCNT for quadrature encoders. Dual UART covers debug + motor control serial. 16 PWM channels >> 6 required. 34 GPIO >> 25 required. Bluetooth 4.2 + WiFi 4. Extensively deployed in robotics/IoT. Best pass-first option after ESP32-C3 fails GPIO hard check.",
+      "tradeoffs": [
+        "BLE 4.2 (not 5.0) \u2014 sufficient for robotic control but ESP32-S3 has 5.0 if needed later",
+        "3x UART available but teaching_car uses 2 \u2014 third available for future sensor interfaces"
+      ],
+      "accepted_warnings": [
+        "Package suitable: SMD Module vs schema's QFN/BGA/VFQFN expectation \u2014 user explicitly requested pre-built integrated module, not bare IC"
+      ],
+      "alternate_lcsc": "",
+      "requirements_snapshot": {
+        "wireless": [
+          "wifi",
+          "ble"
+        ],
+        "pwm_channels": 6,
+        "i2c_buses": 1,
+        "spi_needed": false,
+        "uart_count": 2,
+        "adc_channels": 2,
+        "gpio_total": 25,
+        "clock_min": 80.0,
+        "flash_min": 1024,
+        "ram_min": 256,
+        "vdd": 3.3,
+        "allowed_packages": [
+          "QFN",
+          "WLCSP",
+          "BGA",
+          "VFQFN"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-05-14T06:52:31+00:00",
+      "chosen": {
+        "lcsc": "C2913202",
+        "mpn": "ESP32-S3-WROOM-1-N16R8",
+        "manufacturer": "Espressif Systems",
+        "description": "",
+        "package": "SMD-41 Module 18x25.5mm",
+        "price": 4.92,
+        "price_tiers": {},
+        "stock": 11044,
+        "datasheet_url": "https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf",
+        "library_type": "extended",
+        "qty_per_board": 1,
+        "notes": ""
+      },
+      "rejected": [
+        {
+          "lcsc": "C701343",
+          "mpn": "ESP32-WROOM-32E-N16",
+          "reason": "Module-only price $4.66 vs $4.92 (-5.6%) but requires CP2102/CH340 UART bridge IC + auto-reset transistor circuit for USB programming -- system-level BOM $5.06 vs $4.92, S3 wins. BLE 4.2 vs 5.0. No native USB. LX6 (no vector accel)."
+        },
+        {
+          "lcsc": "C2934560",
+          "mpn": "ESP32-C3-WROOM-02-N4",
+          "reason": "GPIO count 22 < 25 required (BLOCKED on hard constraint). Single-core RISC-V also limits real-time motor + Wi-Fi concurrency for teaching demos."
+        },
+        {
+          "lcsc": "C701342",
+          "mpn": "ESP32-WROOM-32E-N8",
+          "reason": "Same bridge-IC penalty as N16 variant. Flash 8MB vs 16MB. WROOM-32E line dropped in favor of S3 family."
+        }
+      ],
+      "rationale": "ESP32-S3-WROOM-1-N16R8 redirected from haiku-picked ESP32-WROOM-32E-N16 after lead-agent review caught math error (haiku claimed 3x cost when actual delta was 5.6%, $4.66->$4.92). System-level BOM analysis flips the call: WROOM-32E needs CP2102/CH340 USB-UART bridge IC (+$0.30) plus auto-reset transistor circuit (+$0.10) for programming, totalling ~$5.06. S3-WROOM-1 has native USB-OTG (USB-C direct to MCU), no bridge needed, total $4.92 -- cheaper AND simpler kit BOM. Pedagogy bonus: native USB eliminates Windows CH340 driver-install pain for students; BLE 5.0 supports modern phone-app sensor demos; 8MB PSRAM enables camera/video buffers if future top-stage modules need them; LX7 vector instructions teach AI-fusion concepts. Active lifecycle confirmed via DigiKey (11,044 stock).",
+      "tradeoffs": [
+        "Module form factor (18x25.5mm SMD) vs bare-IC schema expectation -- explicit user-spec'd module per profile.md.",
+        "Stock 11k vs WROOM-32E's 21k -- both ample for hand-assembly prototype; not a meaningful constraint."
+      ],
+      "accepted_warnings": [
+        "Package suitable"
+      ],
+      "alternate_lcsc": "",
+      "requirements_snapshot": {
+        "wireless": [
+          "wifi",
+          "ble"
+        ],
+        "pwm_channels": 6,
+        "i2c_buses": 1,
+        "spi_needed": false,
+        "uart_count": 2,
+        "adc_channels": 2,
+        "gpio_total": 25,
+        "clock_min": 80.0,
+        "flash_min": 1024,
+        "ram_min": 256,
+        "vdd": 3.3,
+        "allowed_packages": [
+          "QFN",
+          "WLCSP",
+          "BGA",
+          "VFQFN"
+        ]
+      }
+    }
+  ],
+  "candidates_examined": [],
+  "category": "mcu_ble"
+}

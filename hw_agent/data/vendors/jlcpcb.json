@@ -1,0 +1,56 @@
+{
+  "$schema": "vendor-seed/v1",
+  "vendor": {
+    "slug": "jlcpcb",
+    "name": "JLCPCB",
+    "homepage": "https://jlcpcb.com",
+    "api_status": "partner-gated",
+    "notes": "Public API requires partner approval at api.jlcpcb.com. Without approval: upload via cart.jlcpcb.com/quote."
+  },
+  "capabilities": {
+    "min_layers": 1,
+    "max_layers": 32,
+    "finishes": ["hasl", "hasl_lead_free", "enig"],
+    "soldermask_colors": ["green", "blue", "red", "black", "white", "yellow", "purple", "matte_black", "matte_green"],
+    "silkscreen_colors": ["white", "black", "yellow"],
+    "min_track_mm": 0.0889,
+    "min_via_mm": 0.2,
+    "min_hole_mm": 0.15,
+    "min_qty": 5,
+    "max_panel_qty_different_designs": 200,
+    "thickness_mm": [0.4, 0.6, 0.8, 1.0, 1.2, 1.6, 2.0],
+    "copper_outer_oz": [1.0, 2.0, 3.0],
+    "copper_inner_oz": [0.5, 1.0],
+    "supports_castellated": true,
+    "supports_via_in_pad": true,
+    "supports_edge_plating": true,
+    "supports_assembly": true,
+    "supports_impedance_control": true
+  },
+  "columns": {
+    "bom": {
+      "Reference":  "Designator",
+      "Value":      "Comment",
+      "Footprint":  "Footprint",
+      "LCSC":       "LCSC Part #"
+    },
+    "cpl": {
+      "Ref":   "Designator",
+      "PosX":  "Mid X",
+      "PosY":  "Mid Y",
+      "Side":  "Layer",
+      "Rot":   "Rotation"
+    }
+  },
+  "lead_times": [
+    {"tier": "economic", "days_min": 6, "days_max": 8, "vendor_sku": "ECO"},
+    {"tier": "standard", "days_min": 4, "days_max": 6, "vendor_sku": "STD"},
+    {"tier": "express",  "days_min": 1, "days_max": 2, "vendor_sku": "EXP"}
+  ],
+  "rotation_quirks": {
+    "needs_correction_table": true,
+    "notes": "JLC's pick-and-place expects rotations that differ from KiCad defaults for many common parts. Vendored rotation table from bennymeg/Fabrication-Toolkit goes in rotations.csv when format pipeline ships."
+  },
+  "last_verified": "2026-05-05",
+  "verification_notes": "Updated 2026-05-05 from jlcpcb.com FR-4 product page: max_layers 20→32 (high-layer is gated/quoted), copper_outer adds 3.0oz. JS-rendered capability table not directly fetchable; OSP/immersion finishes and exact economic/standard lead-times not re-verified."
+}

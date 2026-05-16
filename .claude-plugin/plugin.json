@@ -1,0 +1,11 @@
+{
+  "name": "hw-toolkit",
+  "description": "AI-powered hardware design pipeline for Claude Code. Schematic-as-code, auto-routing, thermal/SI simulation, DFM checks — all from slash commands.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Freight Flow AI",
+    "url": "https://github.com/El-Guapo2024"
+  },
+  "repository": "https://github.com/El-Guapo2024/hw-toolkit",
+  "license": "MIT"
+}

@@ -1,0 +1,2 @@
+[console_scripts]
+hw-router-service = hw_router_service.__main__:main

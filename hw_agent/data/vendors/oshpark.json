@@ -1,0 +1,44 @@
+{
+  "$schema": "vendor-seed/v1",
+  "vendor": {
+    "slug": "oshpark",
+    "name": "OSH Park",
+    "homepage": "https://oshpark.com",
+    "api_status": "public",
+    "notes": "Public REST API. Bare-board only — no assembly. Payment is by emailed link, not card-on-file. Boards are always purple (their signature ENIG-on-purple-mask process)."
+  },
+  "capabilities": {
+    "min_layers": 2,
+    "max_layers": 6,
+    "finishes": ["enig"],
+    "soldermask_colors": ["purple"],
+    "silkscreen_colors": ["white"],
+    "min_track_mm": 0.1524,
+    "min_via_mm": 0.3302,
+    "min_hole_mm": 0.254,
+    "min_qty": 3,
+    "max_panel_qty_different_designs": 1,
+    "thickness_mm": [0.8, 1.6],
+    "copper_outer_oz": [1.0, 2.0],
+    "copper_inner_oz": [0.5],
+    "supports_castellated": false,
+    "supports_via_in_pad": false,
+    "supports_edge_plating": false,
+    "supports_assembly": false,
+    "supports_impedance_control": false
+  },
+  "columns": {
+    "bom": null,
+    "cpl": null
+  },
+  "lead_times": [
+    {"tier": "standard", "days_min": 9, "days_max": 12, "vendor_sku": "STANDARD"},
+    {"tier": "express",  "days_min": 4, "days_max": 6,  "vendor_sku": "SUPER_SWIFT"}
+  ],
+  "rotation_quirks": {
+    "needs_correction_table": false,
+    "notes": "Bare-board only — no pick-and-place, no rotation concerns."
+  },
+  "last_verified": "2026-05-05",
+  "verification_notes": "Cross-checked against docs.oshpark.com/services/ on 2026-05-05. min_track 0.1524mm is conservative (4-6L tier accepts 0.127mm); min_hole 0.254mm is conservative (6L tier accepts 0.2032mm). 2-layer 2oz Cu service exists. Super Swift days corrected 5-7 → 4-6. Medium Run + After Dark services not modeled; min_qty=3 is service-specific (Medium Run 2L is multiples of 10)."
+}

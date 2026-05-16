@@ -1,0 +1,166 @@
+{
+  "name": "imu",
+  "requirements": {
+    "axes": 6,
+    "interface": "i2c",
+    "accel_range_g": 4.0,
+    "gyro_range_dps": 500.0,
+    "onboard_processing": false,
+    "vdd": 3.3,
+    "allowed_packages": [
+      "LGA",
+      "QFN",
+      "DFN",
+      "WLCSP"
+    ]
+  },
+  "actuals": {
+    "sensor_type": "imu",
+    "axes": 6,
+    "interfaces": [
+      "i2c",
+      "spi"
+    ],
+    "accel_range_g": 16.0,
+    "gyro_range_dps": 2000.0,
+    "has_dmp": false,
+    "vdd_min": 1.71,
+    "vdd_max": 3.6,
+    "idd_ua": 3.5,
+    "package": "LGA-14(2.5x3)",
+    "stock": 15249
+  },
+  "chosen_part": {
+    "lcsc": "C5129967",
+    "mpn": "ICM-42607-P",
+    "manufacturer": "TDK InvenSense",
+    "description": "",
+    "package": "LGA-14(2.5x3)",
+    "price": 2.25,
+    "price_tiers": {},
+    "stock": 15249,
+    "datasheet_url": "",
+    "library_type": "extended",
+    "qty_per_board": 1,
+    "notes": ""
+  },
+  "decisions": [
+    {
+      "timestamp": "2026-05-12T05:29:30+00:00",
+      "chosen": {
+        "lcsc": "C2655096",
+        "mpn": "LSM9DS1TR",
+        "manufacturer": "STMicroelectronics",
+        "description": "",
+        "package": "LGA-24(3x3.5)",
+        "price": 10.7747,
+        "price_tiers": {},
+        "stock": 193,
+        "datasheet_url": "https://www.lcsc.com/datasheet/lcsc_datasheet_2202131700_STMicroelectronics-LSM9DS1TR_C2655096.pdf",
+        "library_type": "extended",
+        "qty_per_board": 1,
+        "notes": ""
+      },
+      "rejected": [
+        {
+          "lcsc": "C726001",
+          "mpn": "ICM-20948",
+          "reason": "6-DoF only (accel+gyro, no mag). 3.3x stock cost, higher power (8\u00b5A vs 5\u00b5A)."
+        },
+        {
+          "lcsc": "C967633",
+          "mpn": "LSM6DS3TR-C",
+          "reason": "6-DoF only. Cheapest but requires external mag IC for heading ref. Split design vs single-IC goal."
+        }
+      ],
+      "rationale": "LSM9DS1TR is the only candidate with 9-axis part name (accel+gyro+mag). Despite JLCPCB database showing 6-axis specs, the genuine LSM9DS1 is a 9-axis IC. Modern STMicro sensor (post-2018). Meets accel/gyro range, I2C support, 3.3V compatible. DMP not critical for teaching robot. LGA-24 supports learning-grade reliability vs hobby modules.",
+      "tradeoffs": [
+        "Stock: 193 units vs 500+ target (LCSC deep stock but below threshold\u2014mitigated by 4000 reel qty).",
+        "Database vs reality: JLCPCB specs show 6-axis but part name/STMicro docs confirm 9-axis. Verify datasheet mag presence before PCB release.",
+        "Magnetic interference: Motor proximity requires calibration routine. Consider external hard-iron compensation IC if heading drift >5\u00b0."
+      ],
+      "accepted_warnings": [
+        "Stock threshold"
+      ],
+      "alternate_lcsc": "",
+      "requirements_snapshot": {
+        "axes": 9,
+        "interface": "i2c",
+        "accel_range_g": 4.0,
+        "gyro_range_dps": 500.0,
+        "onboard_processing": false,
+        "vdd": 3.3,
+        "allowed_packages": [
+          "LGA",
+          "QFN",
+          "DFN",
+          "WLCSP"
+        ]
+      }
+    },
+    {
+      "timestamp": "2026-05-14T06:29:08+00:00",
+      "chosen": {
+        "lcsc": "C5129967",
+        "mpn": "ICM-42607-P",
+        "manufacturer": "TDK InvenSense",
+        "description": "",
+        "package": "LGA-14(2.5x3)",
+        "price": 2.25,
+        "price_tiers": {},
+        "stock": 15249,
+        "datasheet_url": "",
+        "library_type": "extended",
+        "qty_per_board": 1,
+        "notes": ""
+      },
+      "rejected": [
+        {
+          "lcsc": "C967633",
+          "mpn": "LSM6DS3TR-C",
+          "reason": "End of Life per Mouser (0 stock, 37k on JLC is liquidation inventory)"
+        },
+        {
+          "lcsc": "C97633",
+          "mpn": "ICM-20602",
+          "reason": "Obsolete per Mouser"
+        },
+        {
+          "lcsc": "C95230",
+          "mpn": "LSM9DS1TR",
+          "reason": "EOL per Mouser, was original chosen part, only 183 on JLC (liquidation)"
+        },
+        {
+          "lcsc": "",
+          "mpn": "BMI160",
+          "reason": "Obsolete per Mouser (0 stock)"
+        },
+        {
+          "lcsc": "C2655099",
+          "mpn": "ICM-42605",
+          "reason": "Active on Mouser but 0 stock (unavailable despite Active status)"
+        }
+      ],
+      "rationale": "ICM-42607-P is the cheapest active 6-axis IMU with \u2265500 stock. Verified Active on Mouser, 15,249 units in stock on JLC. Exceeds all requirements: \u00b12000dps gyro >500dps, \u00b116g accel >4g, I2C+SPI, 1.71-3.6V spans requirement, LGA-14 package matches allowed list.",
+      "tradeoffs": [],
+      "accepted_warnings": [],
+      "alternate_lcsc": "",
+      "requirements_snapshot": {
+        "axes": 6,
+        "interface": "i2c",
+        "accel_range_g": 4.0,
+        "gyro_range_dps": 500.0,
+        "onboard_processing": false,
+        "vdd": 3.3,
+        "allowed_packages": [
+          "LGA",
+          "QFN",
+          "DFN",
+          "WLCSP"
+        ]
+      }
+    }
+  ],
+  "candidates_examined": [],
+  "category": "imu"
+}
