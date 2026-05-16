@@ -65,7 +65,7 @@ def _svg_path_to_image(svg_path: str | Path) -> Image | None:
 def _kicad_sch_to_svg(kicad_sch: Path, out_dir: Path | None = None) -> Path | None:
     """Run `kicad-cli sch export svg` on a .kicad_sch. Returns the SVG path or None."""
     import subprocess
-    from hw_agent.schematics.kicad_paths import kicad_cli
+    from hw_agent.artifacts.schematics.kicad_paths import kicad_cli
 
     out_dir = out_dir or kicad_sch.parent
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -86,7 +86,7 @@ def _kicad_pcb_to_svg(kicad_pcb: Path, out_dir: Path | None = None) -> Path | No
     you'd see in pcbnew's GUI.
     """
     import subprocess
-    from hw_agent.schematics.kicad_paths import kicad_cli
+    from hw_agent.artifacts.schematics.kicad_paths import kicad_cli
 
     out_dir = out_dir or kicad_pcb.parent
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -359,7 +359,7 @@ def _format_verifications_md(records: list[dict]) -> str:
 
 
 def _get_nav(pdf_path: str) -> "DatasheetNavigator":
-    from hw_agent.datasheets.navigator import DatasheetNavigator
+    from hw_agent.artifacts.datasheets.navigator import DatasheetNavigator
     if pdf_path not in _navigators:
         nav = DatasheetNavigator(pdf_path)
         nav.scan()
@@ -402,7 +402,7 @@ def ds_find_spec(pdf_path: str, spec_name: str, pages: Optional[list[int]] = Non
 @mcp.tool()
 def ds_download(part_number: str, manufacturer: Optional[str] = None) -> str:
     """Download a datasheet PDF. Returns path or error."""
-    from hw_agent.datasheets.downloader import download_datasheet
+    from hw_agent.artifacts.datasheets.downloader import download_datasheet
     path = download_datasheet(part_number, manufacturer=manufacturer)
     return str(path) if path else f"Failed to download datasheet for {part_number}"
 
@@ -590,7 +590,7 @@ def calc_microstrip_z0(
 
     Returns Z0 (Ω), effective εr, propagation delay (ps/mm).
     """
-    from hw_agent.calculators.transmission_line import microstrip_z0
+    from hw_agent.domain.calculators.transmission_line import microstrip_z0
     return microstrip_z0(width_mm=width_mm, height_mm=height_mm,
                          thickness_mm=thickness_mm, er=er)
 
@@ -616,7 +616,7 @@ def calc_stripline_z0(
 
     Returns Z0 (Ω) and propagation delay.
     """
-    from hw_agent.calculators.transmission_line import stripline_z0
+    from hw_agent.domain.calculators.transmission_line import stripline_z0
     return stripline_z0(width_mm=width_mm, plane_spacing_mm=plane_spacing_mm,
                         thickness_mm=thickness_mm, er=er)
 
@@ -642,7 +642,7 @@ def calc_via_inductance(
 
     Returns L (nH) + henries.
     """
-    from hw_agent.calculators.transmission_line import via_inductance
+    from hw_agent.domain.calculators.transmission_line import via_inductance
     return via_inductance(height_mm=height_mm, diameter_mm=diameter_mm,
                           return_path_mm=return_path_mm)
 
@@ -652,7 +652,7 @@ def calc_via_inductance(
 @mcp.tool()
 def list_templates() -> list[str]:
     """List available component research templates."""
-    from hw_agent.investigator import _load_templates, TEMPLATES
+    from hw_agent.core.investigator import _load_templates, TEMPLATES
     _load_templates()
     return list(TEMPLATES.keys())
 
@@ -660,7 +660,7 @@ def list_templates() -> list[str]:
 @mcp.tool()
 def get_template_specs(component_type: str) -> list[dict]:
     """Get the spec definitions for a component template (what to extract)."""
-    from hw_agent.investigator import _load_templates, TEMPLATES
+    from hw_agent.core.investigator import _load_templates, TEMPLATES
     _load_templates()
     t = TEMPLATES.get(component_type)
     if not t:
@@ -674,7 +674,7 @@ def get_template_specs(component_type: str) -> list[dict]:
 @mcp.tool()
 def get_search_queries(component_type: str, **params) -> list[dict]:
     """Get JLCPCB search queries for a component template."""
-    from hw_agent.investigator import _load_templates, TEMPLATES
+    from hw_agent.core.investigator import _load_templates, TEMPLATES
     _load_templates()
     t = TEMPLATES.get(component_type)
     if not t:
@@ -699,7 +699,7 @@ def run_investigation(
     actual_load_ma: Optional[float] = None,
 ) -> str:
     """Run a full component investigation. Returns markdown report."""
-    from hw_agent.investigator import investigate
+    from hw_agent.core.investigator import investigate
     params = {}
     if vin is not None: params["vin"] = vin
     if vout is not None: params["vout"] = vout
@@ -765,7 +765,7 @@ def q_load(component_type: str) -> dict:
     field names differ from requirements (e.g. requirements have `iout`, actuals
     have `iout_max`; requirements have `interface`, actuals have `interfaces`).
     """
-    from hw_agent.templates import SUBSYSTEM_REGISTRY
+    from hw_agent.domain.templates import SUBSYSTEM_REGISTRY
     cls = SUBSYSTEM_REGISTRY.get(component_type)
     if cls is None:
         return {
@@ -788,7 +788,7 @@ def q_load(component_type: str) -> dict:
 @mcp.tool()
 def q_list() -> list[dict]:
     """[read] List all subsystem types in the registry with their descriptions."""
-    from hw_agent.templates import SUBSYSTEM_REGISTRY
+    from hw_agent.domain.templates import SUBSYSTEM_REGISTRY
     return [
         {
             "component_type": cat,
@@ -834,7 +834,7 @@ def q_validate(component_type: str, answers: dict) -> dict:
     Returns `{ok: bool, errors: list[dict]}` — Pydantic ValidationError details
     on failure, normalized values on success.
     """
-    from hw_agent.templates import SUBSYSTEM_REGISTRY
+    from hw_agent.domain.templates import SUBSYSTEM_REGISTRY
     cls = SUBSYSTEM_REGISTRY.get(component_type)
     if cls is None:
         return {"ok": False, "errors": [{"msg": f"unknown component_type `{component_type}`"}]}
@@ -851,7 +851,7 @@ def q_validate(component_type: str, answers: dict) -> dict:
 @mcp.tool()
 def q_searches(component_type: str, answers: dict) -> list[dict]:
     """[read] Generate JLCPCB search queries for a subsystem given the engineer's answers."""
-    from hw_agent.templates import SUBSYSTEM_REGISTRY
+    from hw_agent.domain.templates import SUBSYSTEM_REGISTRY
     cls = SUBSYSTEM_REGISTRY.get(component_type)
     if cls is None:
         avail = ", ".join(SUBSYSTEM_REGISTRY.keys())
@@ -952,8 +952,8 @@ def subsystem_add(project: str, category: str, name: str, requirements: dict,
 
     Returns confirmation + full project status.
     """
-    from hw_agent.templates import SUBSYSTEM_REGISTRY
-    from hw_agent.project_state.subsystems import (
+    from hw_agent.domain.templates import SUBSYSTEM_REGISTRY
+    from hw_agent.artifacts.project_state.subsystems import (
         subsystem_save, subsystem_load, aggregate_project_status,
     )
 
@@ -998,7 +998,7 @@ def subsystem_update_requirements(project: str, name: str, requirements: dict) -
 
     Returns confirmation + project status.
     """
-    from hw_agent.project_state.subsystems import (
+    from hw_agent.artifacts.project_state.subsystems import (
         subsystem_load, subsystem_save, aggregate_project_status,
     )
 
@@ -1031,7 +1031,7 @@ def subsystem_update_actuals(project: str, name: str, actuals: dict) -> list:
 
     Returns confirmation + updated project status.
     """
-    from hw_agent.project_state.subsystems import subsystem_load, subsystem_save, aggregate_project_status
+    from hw_agent.artifacts.project_state.subsystems import subsystem_load, subsystem_save, aggregate_project_status
 
     sub = subsystem_load(project, name)
     if sub is None:
@@ -1095,8 +1095,8 @@ def subsystem_choose_part(
 
     Returns confirmation + project status.
     """
-    from hw_agent.project_state.subsystems import subsystem_load, subsystem_save, aggregate_project_status
-    from hw_agent.subsystem import ChosenPart, Decision
+    from hw_agent.artifacts.project_state.subsystems import subsystem_load, subsystem_save, aggregate_project_status
+    from hw_agent.core.subsystem import ChosenPart, Decision
 
     sub = subsystem_load(project, name)
     if sub is None:
@@ -1130,7 +1130,7 @@ def subsystem_choose_part(
     # Re-run validation against the just-committed state so the agent can't miss
     # hard failures or unacknowledged soft warnings. Informational only — the
     # commit already happened; agent decides whether to revisit.
-    from hw_agent.checks import normalize_check_id
+    from hw_agent.domain.checks import normalize_check_id
     post_status = sub.status()
     hard_fails = [c for c in post_status.failed if c.severity == "hard"]
     soft_fails = [c for c in post_status.failed if c.severity == "soft"]  # only the unacknowledged ones — accepted ones are now post_status.accepted
@@ -1178,7 +1178,7 @@ def subsystem_choose_part(
 @mcp.tool()
 def subsystem_remove(project: str, name: str) -> list:
     """[write] Remove a subsystem from a project. Returns updated project status."""
-    from hw_agent.project_state.subsystems import subsystem_delete, aggregate_project_status
+    from hw_agent.artifacts.project_state.subsystems import subsystem_delete, aggregate_project_status
     ok = subsystem_delete(project, name)
     ps = aggregate_project_status(project)
     return [
@@ -1190,7 +1190,7 @@ def subsystem_remove(project: str, name: str) -> list:
 @mcp.tool()
 def subsystem_status(project: str, name: str) -> list:
     """[read] Status for a single subsystem (markdown). Cheaper than project_status."""
-    from hw_agent.project_state.subsystems import subsystem_load
+    from hw_agent.artifacts.project_state.subsystems import subsystem_load
     sub = subsystem_load(project, name)
     if sub is None:
         raise ValueError(f"No subsystem `{name}` in project `{project}`.")
@@ -1200,7 +1200,7 @@ def subsystem_status(project: str, name: str) -> list:
 @mcp.tool()
 def project_status(project: str) -> list:
     """[read] Aggregated status across all subsystems in a project."""
-    from hw_agent.project_state.subsystems import aggregate_project_status
+    from hw_agent.artifacts.project_state.subsystems import aggregate_project_status
     return [_format_project_status_md(aggregate_project_status(project))]
 
 
@@ -1230,7 +1230,7 @@ def _require_project_exists(project: str) -> str | None:
             f"project slug '{project}' has invalid characters; "
             f"only letters, digits, hyphen, and underscore are allowed."
         )
-    from hw_agent.project_state.paths import project_dir
+    from hw_agent.artifacts.project_state.paths import project_dir
     d = project_dir(project)
     if not d.exists():
         return f"project '{project}' not found at {d.relative_to(Path.cwd()) if d.is_relative_to(Path.cwd()) else d}"
@@ -1247,7 +1247,7 @@ def bom_list(project: str) -> list[dict]:
     err = _require_project_exists(project)
     if err is not None:
         raise ValueError(err)
-    from hw_agent.project_state.subsystems import subsystem_list, subsystem_load
+    from hw_agent.artifacts.project_state.subsystems import subsystem_list, subsystem_load
     items = []
     for name in subsystem_list(project):
         sub = subsystem_load(project, name)
@@ -1279,8 +1279,8 @@ def bom_summary(project: str, low_stock_threshold: int = 500) -> str:
 
     # Determine which subsystems explicitly accepted "Stock threshold" so they
     # don't count against supply risk (engineer signed off on the low-stock part).
-    from hw_agent.project_state.subsystems import subsystem_load
-    from hw_agent.checks import normalize_check_id
+    from hw_agent.artifacts.project_state.subsystems import subsystem_load
+    from hw_agent.domain.checks import normalize_check_id
     stock_acked: set[str] = set()
     for it in items:
         sub = subsystem_load(project, it["subsystem"])
@@ -1372,8 +1372,8 @@ def analyze_candidate(
 
     Returns markdown report: verdict + check table + calculator outputs.
     """
-    from hw_agent.project_state.subsystems import subsystem_load, subsystem_save
-    from hw_agent.subsystem import ExaminedCandidate
+    from hw_agent.artifacts.project_state.subsystems import subsystem_load, subsystem_save
+    from hw_agent.core.subsystem import ExaminedCandidate
 
     sub = subsystem_load(project, name)
     if sub is None:
@@ -1516,7 +1516,7 @@ def verify_candidate(
 
     Returns markdown PASS/FAIL/MISSING table for the proposed state.
     """
-    from hw_agent.project_state.subsystems import subsystem_load
+    from hw_agent.artifacts.project_state.subsystems import subsystem_load
 
     sub = subsystem_load(project, name)
     if sub is None:
@@ -1584,7 +1584,7 @@ def svg_buck(
     components/buck_converter[/<subsystem>]/schematic.{svg,png}. Pass `subsystem`
     if your project has more than one buck so they don't clobber each other.
     Returns inline PNG plus both paths."""
-    from hw_agent.schematics.svg import render_buck_schematic
+    from hw_agent.artifacts.schematics.svg import render_buck_schematic
     r = render_buck_schematic(
         project=project, part=part, vin_label=vin_label, vout_label=vout_label,
         cin=cin, cout=cout, inductor=inductor, r1=r1, r2=r2, vref=vref, cboot=cboot,
@@ -1606,7 +1606,7 @@ def svg_ldo(
     """Generate a schemdraw render of an LDO. Saves SVG + PNG to
     components/ldo[/<subsystem>]/schematic.{svg,png}. Pass `subsystem` if your
     project has more than one LDO."""
-    from hw_agent.schematics.svg import render_ldo_schematic
+    from hw_agent.artifacts.schematics.svg import render_ldo_schematic
     r = render_ldo_schematic(
         project=project, part=part, vin_label=vin_label, vout_label=vout_label,
         cin=cin, cout=cout, output=_schematic_output("ldo", subsystem),
@@ -1630,7 +1630,7 @@ def svg_motor_driver(
     """Generate a schemdraw render of a dual H-bridge motor driver. Saves SVG +
     PNG to components/motor_driver[/<subsystem>]/schematic.{svg,png}. Pass
     `subsystem` if your project has more than one driver."""
-    from hw_agent.schematics.svg import render_motor_driver_schematic
+    from hw_agent.artifacts.schematics.svg import render_motor_driver_schematic
     r = render_motor_driver_schematic(
         project=project, part=part, vm_label=vm_label,
         motor_a=motor_a, motor_b=motor_b,
@@ -1652,7 +1652,7 @@ def svg_voltage_divider(
 ) -> list:
     """Generate a schemdraw render of a voltage divider. Saves SVG + PNG to
     components/voltage_divider[/<subsystem>]/schematic.{svg,png}."""
-    from hw_agent.schematics.svg import render_voltage_divider
+    from hw_agent.artifacts.schematics.svg import render_voltage_divider
     r = render_voltage_divider(
         project=project, vin_label=vin, r1=r1, r2=r2, cfilt=cfilt,
         adc_label=vout_label, output=_schematic_output("voltage_divider", subsystem),
@@ -1685,7 +1685,7 @@ def kicad_export_schem(
 
     Returns the absolute path, and optionally an inline PNG.
     """
-    from hw_agent.schematics.ksa_writer import export_file
+    from hw_agent.artifacts.schematics.ksa_writer import export_file
 
     in_path = Path(schem_path)
     if output_path is None:
@@ -1700,7 +1700,7 @@ def kicad_export_schem(
 
     if with_render:
         try:
-            from hw_agent.schematics.render_focus import render_focused_png
+            from hw_agent.artifacts.schematics.render_focus import render_focused_png
             r = render_focused_png(sch, zoom_to=zoom_to)
             return [text, Image(path=str(r["png_path"]))]
         except Exception as e:
@@ -1712,7 +1712,7 @@ def kicad_export_schem(
 def kicad_eval(kicad_sch: str, svg_dir: Optional[str] = None) -> list:
     """[eval/compute] Run kicad-cli ERC + SVG export against an existing .kicad_sch.
 
-    Thin wrapper over hw_agent.schematics.eval.run_eval — same pipeline used
+    Thin wrapper over hw_agent.artifacts.schematics.eval.run_eval — same pipeline used
     by the file-watcher daemon. Use this when you already have a .kicad_sch
     on disk and just want the ERC report.
 
@@ -1722,7 +1722,7 @@ def kicad_eval(kicad_sch: str, svg_dir: Optional[str] = None) -> list:
 
     Returns markdown ERC summary + inline schematic PNG.
     """
-    from hw_agent.schematics.eval import run_eval
+    from hw_agent.artifacts.schematics.eval import run_eval
 
     sch = Path(kicad_sch).resolve()
     if not sch.exists():
@@ -1758,7 +1758,7 @@ def get_render(
     Returns markdown header (ref + bbox) + inline PNG. Cached on (mtime,
     zoom_to, padding, dpi) so repeat calls on an unchanged sheet are ~10ms.
     """
-    from hw_agent.schematics.render_focus import render_focused_png
+    from hw_agent.artifacts.schematics.render_focus import render_focused_png
 
     sch_path = Path(kicad_sch).resolve()
     if not sch_path.exists():
@@ -1819,7 +1819,7 @@ async def eval_subsystem(
     an inline schematic PNG if with_render=True.
     """
     import asyncio
-    from hw_agent.schematics.eval import eval_from_json
+    from hw_agent.artifacts.schematics.eval import eval_from_json
 
     p = Path(schem_json).resolve()
     if not p.exists():
@@ -1861,7 +1861,7 @@ async def eval_subsystem(
         sch_path = (d.get("artifacts") or {}).get("kicad_sch")
         if sch_path:
             try:
-                from hw_agent.schematics.render_focus import render_focused_png
+                from hw_agent.artifacts.schematics.render_focus import render_focused_png
                 r = render_focused_png(Path(sch_path), zoom_to=zoom_to)
                 return [md, Image(path=str(r["png_path"]))]
             except Exception as e:
@@ -1896,7 +1896,7 @@ def _render_after_edit(
     if not with_render:
         return None
     try:
-        from hw_agent.schematics.render_focus import render_focused_png
+        from hw_agent.artifacts.schematics.render_focus import render_focused_png
         r = render_focused_png(kicad_sch, zoom_to=zoom_to)
         return Image(path=str(r["png_path"]))
     except Exception:
@@ -1928,7 +1928,7 @@ def add_ic(
         rotation: rotation in degrees (0/90/180/270)
         with_render: include a focused PNG zoomed to the new IC
     """
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         entry = sch_ops.add_ic(p, ref, lib_id, (at_x, at_y),
@@ -1980,7 +1980,7 @@ def add_custom_ic(
     Idempotent on re-adding the same `name` (skips lib_symbol synthesis if
     already present in hwagent.kicad_sym).
     """
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
 
     # Normalize pin entries — accept "at": [x, y] or "at": (x, y)
@@ -2019,7 +2019,7 @@ def add_capacitor(
     with_render: bool = False,
 ) -> list:
     """[author/write] Place a capacitor (Device:C). orient: up/down/left/right."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         sch_ops.add_capacitor(p, ref, value, (at_x, at_y), orient=orient)
@@ -2037,7 +2037,7 @@ def add_resistor(
     with_render: bool = False,
 ) -> list:
     """[author/write] Place a resistor (Device:R). orient: up/down/left/right."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         sch_ops.add_resistor(p, ref, value, (at_x, at_y), orient=orient)
@@ -2055,7 +2055,7 @@ def add_inductor(
     with_render: bool = False,
 ) -> list:
     """[author/write] Place an inductor (Device:L). orient: up/down/left/right."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         sch_ops.add_inductor(p, ref, value, (at_x, at_y), orient=orient)
@@ -2072,7 +2072,7 @@ def add_power(
     label: str = "VCC", with_render: bool = False,
 ) -> list:
     """[author/write] Place a power-rail symbol. label: "3V3"/"5V"/"12V"/"VCC"."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         entry = sch_ops.add_power(p, ref, (at_x, at_y), label=label)
@@ -2089,7 +2089,7 @@ def add_ground(
     with_render: bool = False,
 ) -> list:
     """[author/write] Place a GND symbol (power:GND)."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         sch_ops.add_ground(p, ref, (at_x, at_y))
@@ -2112,7 +2112,7 @@ def add_wire(
         "VCC1"     — bare net anchor (power/ground/terminal)
         "@40.5,60" — explicit (x, y) mm coordinate
     """
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         sch_ops.add_wire(p, src, dst)
@@ -2128,7 +2128,7 @@ def set_value(
     kicad_sch: str, ref: str, value: str, with_render: bool = False,
 ) -> list:
     """[author/write] Update a symbol\'s Value property."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         sch_ops.set_value(p, ref, value)
@@ -2144,7 +2144,7 @@ def set_footprint(
     kicad_sch: str, ref: str, footprint: str, with_render: bool = False,
 ) -> list:
     """[author/write] Update a symbol\'s Footprint property — Phase 3 PCB-side."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         sch_ops.set_footprint(p, ref, footprint)
@@ -2158,7 +2158,7 @@ def set_footprint(
 @mcp.tool()
 def remove_symbol(kicad_sch: str, ref: str, with_render: bool = False) -> list:
     """[author/write] Remove a symbol. Wires touching it remain (ERC will flag)."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         result = sch_ops.remove(p, ref)
@@ -2172,7 +2172,7 @@ def remove_symbol(kicad_sch: str, ref: str, with_render: bool = False) -> list:
 @mcp.tool()
 def list_pins(kicad_sch: str, ref: str) -> list:
     """[author/read] List pins on a placed symbol — name, number, position."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         pins = sch_ops.list_pins(p, ref)
@@ -2191,7 +2191,7 @@ def list_pins(kicad_sch: str, ref: str) -> list:
 @mcp.tool()
 def list_symbols(kicad_sch: str) -> list:
     """[author/read] Compact list of placed symbols on the sheet."""
-    from hw_agent.schematics import sch_ops
+    from hw_agent.artifacts.schematics import sch_ops
     p = Path(kicad_sch).resolve()
     try:
         syms = sch_ops.list_symbols(p)
@@ -2231,7 +2231,7 @@ def find_kicad_lib(lib_id: str, project_dir: Optional[str] = None) -> dict:
     Use this BEFORE `add_ic` if you suspect a library may be missing — or
     after `add_ic` fails with a "lib_id not found" error.
     """
-    from hw_agent.schematics import lib_fetcher
+    from hw_agent.artifacts.schematics import lib_fetcher
     pdir = Path(project_dir) if project_dir else None
     found = lib_fetcher.find_lib(lib_id, project_dir=pdir)
     if found is None:
@@ -2277,7 +2277,7 @@ def install_kicad_lib(
         cse_text:    raw .kicad_sym body when source starts with "cse:".
         force:       re-download even if already cached.
     """
-    from hw_agent.schematics import lib_fetcher
+    from hw_agent.artifacts.schematics import lib_fetcher
     pdir = Path(project_dir) if project_dir else None
     try:
         result = lib_fetcher.install(
@@ -2301,7 +2301,7 @@ def list_installed_libs(project_dir: Optional[str] = None) -> dict:
       - `project`— registered in this project's `sym-lib-table` or under
                    `<project_dir>/lib/`
     """
-    from hw_agent.schematics import lib_fetcher
+    from hw_agent.artifacts.schematics import lib_fetcher
     pdir = Path(project_dir) if project_dir else None
     return lib_fetcher.list_installed_libs(project_dir=pdir)
 
@@ -2356,7 +2356,7 @@ def design_view(
         if not sch.exists():
             return [f"# design_view: not built yet\n`{sch}` doesn't exist — run `eval_subsystem` first"]
         # Reuse eval_subsystem so we get current ERC status alongside the render
-        from hw_agent.schematics.eval import eval_from_json
+        from hw_agent.artifacts.schematics.eval import eval_from_json
         json_path = sch_dir / "schematic.schem.json"
         out = []
         if json_path.exists():
@@ -2393,9 +2393,9 @@ def design_view(
             return [f"# design_view: PCB not built yet\nrun `pcb_check` consumer (slow loop) or save the JSON to trigger build"]
         # Build DRC summary via the same pipeline preview.pcb_check uses
         import json
-        from hw_agent.schematics.drc_filters import classify, load_filters
+        from hw_agent.artifacts.schematics.drc_filters import classify, load_filters
         import subprocess as sp
-        from hw_agent.schematics.kicad_paths import kicad_cli
+        from hw_agent.artifacts.schematics.kicad_paths import kicad_cli
         json_path = sub_dir / "schematic.schem.json"
         drc_path = sub_dir / "eval_out" / f"{pcb.stem}_drc.json"
         drc_path.parent.mkdir(parents=True, exist_ok=True)
@@ -2626,7 +2626,7 @@ def pcb_ipc_status() -> dict:
     Headless ERC/DRC/exports go through kicad-cli — those don't need this.
     """
     import os as _os
-    from hw_agent.schematics import pcb_backend
+    from hw_agent.artifacts.schematics import pcb_backend
     available = pcb_backend.is_ipc_available()
     return {
         "ipc_available": available,
@@ -2644,7 +2644,7 @@ def list_pcb_footprints(kicad_pcb: str) -> list:
     Reads from pcbnew via IPC — positions reflect any unsaved edits the
     user has made. Returns an "open pcbnew" error if IPC isn't reachable.
     """
-    from hw_agent.schematics import pcb_backend
+    from hw_agent.artifacts.schematics import pcb_backend
     if not pcb_backend.is_ipc_available():
         return ["## list_pcb_footprints: pcbnew not open\n\n"
                 "Open pcbnew with API server enabled, then retry."]
@@ -2684,7 +2684,7 @@ def move_footprint(
             footprint. Requires pcb_save to have run (or pcbnew has
             saved manually) for the on-disk file to reflect the edit.
     """
-    from hw_agent.schematics import pcb_backend
+    from hw_agent.artifacts.schematics import pcb_backend
     result = pcb_backend.move_footprint(
         Path(kicad_pcb).resolve(), ref, x_mm, y_mm, rotation=rotation_deg,
     )
@@ -2706,7 +2706,7 @@ def pcb_save(kicad_pcb: str, with_render: bool = False) -> list:
     `with_render=True` returns a full-sheet PCB PNG so the agent sees
     the saved state (useful as a "checkpoint" view).
     """
-    from hw_agent.schematics import pcb_backend
+    from hw_agent.artifacts.schematics import pcb_backend
     result = pcb_backend.save_board(Path(kicad_pcb).resolve())
     md = f"pcb_save: {'ok' if result.get('ok') else result.get('error', 'failed')}"
     svg_md, img = _pcb_render_after_edit(Path(kicad_pcb).resolve(),
@@ -2727,7 +2727,7 @@ def _pcb_render_after_edit(
     if not with_render:
         return None, None
     try:
-        from hw_agent.schematics.pcb_render import render_pcb
+        from hw_agent.artifacts.schematics.pcb_render import render_pcb
         r = render_pcb(kicad_pcb, zoom_to=zoom_to)
         return f"\n_SVG: `{r['svg_path']}`_", Image(path=str(r["png_path"]))
     except Exception:
@@ -2752,7 +2752,7 @@ def pcb_export_fabrication(kicad_pcb: str, out_dir: Optional[str] = None) -> dic
         kicad_pcb: path to the .kicad_pcb (must have routes already)
         out_dir:   override default output location
     """
-    from hw_agent.schematics.pcb_writer import export_fabrication
+    from hw_agent.artifacts.schematics.pcb_writer import export_fabrication
 
     pcb = Path(kicad_pcb).resolve()
     if not pcb.exists():
@@ -2792,7 +2792,7 @@ async def pcb_route(
         timeout_s:  give up after this many seconds (default 300)
     """
     import asyncio
-    from hw_agent.freerouting import route_board
+    from hw_agent.core.freerouting import route_board
 
     pcb = Path(kicad_pcb).resolve()
     sch = Path(kicad_sch).resolve() if kicad_sch else None
@@ -2847,7 +2847,7 @@ def system_export_kicad(project_dir: str, output: Optional[str] = None) -> list:
 
     Returns confirmation text + an inline PNG of the composed system.
     """
-    from hw_agent.schematics.system_composer import compose_root
+    from hw_agent.artifacts.schematics.system_composer import compose_root
 
     pdir = Path(project_dir)
     out = Path(output) if output else pdir / "kicad" / "system.kicad_sch"
@@ -2871,7 +2871,7 @@ def schem_system(
     motor drivers) with power rails, GPIO connections, and I2C buses.
     Auto-updates as new components are explored.
     """
-    from hw_agent.schematics.svg import render_system_schematic
+    from hw_agent.artifacts.schematics.svg import render_system_schematic
     r = render_system_schematic(project_slug=project, output=output)
     return [f"PNG: `{r['png']}` · SVG: `{r['svg']}`", Image(path=str(r["png"]))]
 
@@ -2889,7 +2889,7 @@ def constraints_check(project: str, component: Optional[str] = None) -> dict:
     The 10% proximity warning catches issues BEFORE they become hard failures.
     """
     from pathlib import Path
-    from hw_agent.schematics.constraints import evaluate_all, evaluate_constraints, load_constraints
+    from hw_agent.artifacts.schematics.constraints import evaluate_all, evaluate_constraints, load_constraints
     import yaml
 
     design_path = Path("docs/projects") / project / "design.yaml"
@@ -3131,7 +3131,7 @@ def pcborder_vendor_seed_schema() -> dict:
 
 
 def _project_order_settings_path(project: str):
-    from hw_agent.project_state.paths import project_dir
+    from hw_agent.artifacts.project_state.paths import project_dir
     return project_dir(project) / "order_settings.json"
 
 
@@ -3506,7 +3506,7 @@ def pcb_export_bom(
 # (lifecycle xcheck only); datasheet VLM fills rdson, theta_ja, iq, ilim, tsd.
 
 
-from hw_agent.templates.part import ACTUALS_REGISTRY, Part
+from hw_agent.domain.templates.part import ACTUALS_REGISTRY, Part
 
 
 @mcp.tool()
@@ -3628,7 +3628,7 @@ def part_delete(mpn: str) -> dict:
 @mcp.tool()
 def part_list() -> dict:
     """List all stored part profiles with their categories and status."""
-    from hw_agent.templates.part import parts_dir
+    from hw_agent.domain.templates.part import parts_dir
     root = parts_dir()
     if not root.exists():
         return {"parts": [], "count": 0, "root": str(root)}
