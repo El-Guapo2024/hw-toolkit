@@ -33,7 +33,7 @@ from typing import Optional
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from .router_engines import (
+from .engines import (
     DEFAULT_ENGINE,
     ENGINES,
     route_with_engine,

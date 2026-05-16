@@ -87,7 +87,7 @@ Agent({
   description: "Research <subsystem>",
   subagent_type: "general-purpose",
   model: "haiku",
-  prompt: "<full body of hw_agent/skills/research-subsystem.md inlined>\n\nProject: <slug>\nSubsystem: <name>\nCategory: <category>"
+  prompt: "<full body of hw_agent/skills/designer/research-subsystem.md inlined>\n\nProject: <slug>\nSubsystem: <name>\nCategory: <category>"
 })
 ```
 
@@ -121,12 +121,12 @@ Final message to the user:
 
 ## MCP cheatsheet for the subagents
 
-The research subagents already get `hw_agent/skills/research-subsystem.md` inlined — that doc explains the MCP discipline (no part names from memory, `verify_candidate` is ground truth, atomic `subsystem_choose_part`, lifecycle check before commit). Don't paraphrase it; **inline the file's contents verbatim** in the subagent prompt.
+The research subagents already get `hw_agent/skills/designer/research-subsystem.md` inlined — that doc explains the MCP discipline (no part names from memory, `verify_candidate` is ground truth, atomic `subsystem_choose_part`, lifecycle check before commit). Don't paraphrase it; **inline the file's contents verbatim** in the subagent prompt.
 
 Related skills live in `hw_agent/skills/`:
-- `full-board-design.md` — full orchestrator (older, multi-phase reference)
-- `research-subsystem.md` — JLC/Mouser/DigiKey search → verify → commit
-- `investigate-subsystem.md` — per-subsystem investigation.md writer
-- `architecture-diagram.md` — Excalidraw + PNG + project README
+- `designer/full-board-design.md` — full orchestrator (older, multi-phase reference)
+- `designer/research-subsystem.md` — JLC/Mouser/DigiKey search → verify → commit
+- `designer/investigate-subsystem.md` — per-subsystem investigation.md writer
+- `designer/architecture-diagram.md` — Excalidraw + PNG + project README
 
 Read those whenever you're unsure what the next phase should look like.

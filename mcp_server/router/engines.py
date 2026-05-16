@@ -88,9 +88,9 @@ async def _export_dsn(kicad_pcb: Path, kicad_sch: Optional[Path], skip_netlist_s
                      on_progress) -> tuple[Path, Path]:
     """Local DSN export. Returns (work_dir, dsn_path)."""
     import subprocess
-    from .freerouting import manager
-    from .schematics import pcb_writer
-    from .schematics.kicad_paths import kicad_cli
+    from hw_agent.freerouting import manager
+    from hw_agent.schematics import pcb_writer
+    from hw_agent.schematics.kicad_paths import kicad_cli
 
     work = manager().work_dir / kicad_pcb.stem
     work.mkdir(parents=True, exist_ok=True)
@@ -122,7 +122,7 @@ async def _export_dsn(kicad_pcb: Path, kicad_sch: Optional[Path], skip_netlist_s
 
 
 async def _import_ses(kicad_pcb: Path, ses_path: Path, on_progress) -> dict:
-    from .schematics import pcb_writer
+    from hw_agent.schematics import pcb_writer
 
     _emit(on_progress, 95, "importing routes back into PCB")
     return await asyncio.to_thread(pcb_writer.run_ses_import, kicad_pcb, ses_path)
