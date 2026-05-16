@@ -36,6 +36,15 @@
             "command": "$CLAUDE_PROJECT_DIR/hw_agent/.claude/hooks/hard_enforce.py"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/hw_agent/.claude/hooks/block_canonical_writes.py"
+          }
+        ]
       }
     ],
     "PostToolUse": [
