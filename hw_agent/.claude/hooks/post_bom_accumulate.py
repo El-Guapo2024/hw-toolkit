@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-"""PostToolUse hook: accumulate BOM running total after subsystem_choose_part.
+"""PostToolUse hook: accumulate BOM total + register load MPNs after subsystem_choose_part.
 
-Reads tool_input (price + qty_per_board), adds line cost to state.bom_running_total_usd
-so the next subsystem_choose_part call sees the cumulative total instead of $0.
+Two mutations on state.json after each successful subsystem_choose_part call:
+  1. bom_running_total_usd += price * qty_per_board
+     (so next call's assert_bom_under_ceiling sees cumulative cost)
+  2. If chosen subsystem's category is a LOAD (not a rail), append its MPN to
+     state.spec_summary.locked_mpns (so load_first lets later rail-add proceed)
+
+Category is read from docs/projects/<project>/subsystems/<name>.json — the
+canonical record written by designer-mcp. The hook does NOT infer category
+from the subsystem name.
 
 Only mutates state if the tool call succeeded (no tool_response error).
 Never blocks (PostToolUse runs after the tool already ran).
@@ -33,6 +40,24 @@ def normalize_tool_name(raw: str) -> str:
     if "__" in raw:
         return raw.split("__")[-1]
     return raw
+
+
+# Categories that are POWER RAILS (not loads). Anything else is a load.
+# Kept in sync with doctrine.yaml's load_first `when` guard.
+RAIL_CATEGORIES = {"buck_converter", "ldo"}
+
+
+def _read_subsystem_category(repo: Path, project: str, name: str) -> str | None:
+    """Read category from the canonical subsystem JSON. Return None if unreadable."""
+    if not project or not name:
+        return None
+    sub_file = repo / "docs" / "projects" / project / "subsystems" / f"{name}.json"
+    if not sub_file.is_file():
+        return None
+    try:
+        return json.loads(sub_file.read_text()).get("category")
+    except Exception:
+        return None
 
 
 def main() -> int:
@@ -86,6 +111,20 @@ def main() -> int:
     })
     state["bom_line_items"] = items
 
+    # If chosen subsystem is a LOAD (not rail), register its MPN as locked.
+    # Unblocks load_first guard for later rail adds.
+    sub_name = tool_input.get("name") or ""
+    mpn = (tool_input.get("mpn") or "").strip()
+    project = state.get("project") or ""
+    category = _read_subsystem_category(repo, project, sub_name)
+    locked_added = False
+    if mpn and category and category not in RAIL_CATEGORIES:
+        spec = state.setdefault("spec_summary", {})
+        locked = spec.setdefault("locked_mpns", [])
+        if mpn not in locked:
+            locked.append(mpn)
+            locked_added = True
+
     try:
         state_file.write_text(json.dumps(state, indent=2) + "\n")
     except Exception as e:
@@ -94,9 +133,14 @@ def main() -> int:
 
     print(
         f"hw-agent harness: bom_running_total_usd = ${state['bom_running_total_usd']:.2f} "
-        f"(+${line_cost:.2f} from {tool_input.get('name','?')})",
+        f"(+${line_cost:.2f} from {sub_name or '?'})",
         file=sys.stderr,
     )
+    if locked_added:
+        print(
+            f"hw-agent harness: locked_mpns += {mpn} (category={category})",
+            file=sys.stderr,
+        )
     return 0
 
 
