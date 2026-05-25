@@ -1,0 +1,177 @@
+{
+  "name": "imu_6axis",
+  "requirements": {
+    "axes": 6,
+    "interface": "I2C",
+    "accel_range_g": 4.0,
+    "gyro_range_dps": 500.0,
+    "onboard_processing": false,
+    "vdd": 3.3,
+    "allowed_packages": [
+      "LGA",
+      "QFN",
+      "DFN",
+      "WLCSP"
+    ]
+  },
+  "actuals": {
+    "sensor_type": null,
+    "axes": 6,
+    "interfaces": [
+      "i2c"
+    ],
+    "accel_range_g": 16.0,
+    "gyro_range_dps": 2000.0,
+    "has_dmp": null,
+    "vdd_min": 1.71,
+    "vdd_max": 3.6,
+    "idd_ua": null,
+    "package": null,
+    "stock": null
+  },
+  "chosen_part": {
+    "lcsc": "C464452",
+    "mpn": "BHI160B",
+    "manufacturer": "Bosch Sensortec",
+    "description": "",
+    "package": "LGA-24(3x3)",
+    "price": 4.5573,
+    "price_tiers": {},
+    "stock": 5749,
+    "datasheet_url": "",
+    "library_type": "extended",
+    "qty_per_board": 1,
+    "notes": ""
+  },
+  "decisions": [
+    {
+      "timestamp": "2026-05-17T01:56:51+00:00",
+      "chosen": {
+        "lcsc": "C464452",
+        "mpn": "BHI160B",
+        "manufacturer": "Bosch Sensortec",
+        "description": "",
+        "package": "LGA-24(3x3)",
+        "price": 4.5573,
+        "price_tiers": {},
+        "stock": 5749,
+        "datasheet_url": "",
+        "library_type": "extended",
+        "qty_per_board": 1,
+        "notes": ""
+      },
+      "rejected": [],
+      "rationale": "Bosch BHI160B is an integrated 6-axis IMU (accel + gyro) with built-in processing. I2C interface matches ESP32-S3. Supply range 1.71-3.6V works with 3.3V rail. Excellent stock availability.",
+      "tradeoffs": [],
+      "accepted_warnings": [],
+      "alternate_lcsc": "",
+      "requirements_snapshot": {
+        "axes": 6,
+        "interface": "I2C",
+        "accel_range_g": 4.0,
+        "gyro_range_dps": 500.0,
+        "onboard_processing": false,
+        "vdd": 3.3,
+        "allowed_packages": [
+          "LGA",
+          "QFN",
+          "DFN",
+          "WLCSP"
+        ]
+      }
+    }
+  ],
+  "candidates_examined": [
+    {
+      "timestamp": "2026-05-17T01:56:47+00:00",
+      "lcsc": "C464452",
+      "mpn": "BHI160B",
+      "manufacturer": "Bosch Sensortec",
+      "package": "LGA-24(3x3)",
+      "price": 4.5573,
+      "stock": 5749,
+      "library_type": "",
+      "actuals": {
+        "axes": 6,
+        "accel_range_g": 16,
+        "gyro_range_dps": 2000,
+        "interfaces": [
+          "i2c"
+        ],
+        "vdd_min": 1.71,
+        "vdd_max": 3.6,
+        "package": "LGA-24(3x3)",
+        "stock": 5749
+      },
+      "verdict": "READY",
+      "checks": [
+        {
+          "name": "Axes",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "6-axis",
+          "required": "\u2265 6-axis",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Accel range",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "\u00b116.0 g",
+          "required": "\u2265 \u00b14.0 g",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Gyro range",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "\u00b12000.0 dps",
+          "required": "\u2265 \u00b1500.0 dps",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Interface",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "i2c",
+          "required": "I2C",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Supply voltage",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "1.71\u20133.6 V",
+          "required": "3.3 V",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Package suitable",
+          "severity": "soft",
+          "status": "pass",
+          "actual": "LGA-24(3x3)",
+          "required": "LGA / QFN / DFN / WLCSP",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Stock threshold",
+          "severity": "soft",
+          "status": "pass",
+          "actual": "5,749 units",
+          "required": "\u2265 500 units",
+          "missing_specs": [],
+          "note": ""
+        }
+      ],
+      "calculations": {},
+      "notes": ""
+    }
+  ],
+  "category": "imu"
+}

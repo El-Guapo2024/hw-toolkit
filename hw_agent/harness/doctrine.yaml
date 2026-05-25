@@ -41,13 +41,6 @@ rules:
     soft:
       stages: [designer]
 
-  # Demoted to soft-only: .live/ optional now that visualizer handles live view.
-  # Validator (assert_no_prose_blocks) still in validators.py for future resurrection.
-  - id: live_visual_only
-    text: "If you write to .live/*.md, use visuals only (mermaid, images, tables). Text reasoning belongs in chat."
-    soft:
-      stages: ["*"]
-
   - id: bom_ceiling
     text: "Running BOM total per board must stay at or below the project ceiling."
     soft:

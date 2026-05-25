@@ -28,4 +28,4 @@ hw-vis        = "hw_agent.visualizer.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["hw_agent*", "mcp_server*"]
+include = ["hw_agent*", "hw_toolkit*", "mcp_server*"]

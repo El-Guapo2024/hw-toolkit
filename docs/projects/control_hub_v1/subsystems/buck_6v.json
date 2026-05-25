@@ -6,7 +6,7 @@
     "vout": 6.0,
     "iout_max": 5.0,
     "iout_typical": 3.0,
-    "iout_margin": 1.2,
+    "iout_margin": 1.0,
     "fsw_khz": null,
     "ripple_pct": 30.0,
     "ambient_c": 40.0,

@@ -1,0 +1,13 @@
+(kicad_sch
+	(version 20240210)
+	(generator "hw_agent.pcb_designer")
+	(generator_version "1.0")
+	(uuid "8df03aa1-39b1-417c-b17a-1d7240f3bde4")
+	(paper "A4")
+	(lib_symbols)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+)

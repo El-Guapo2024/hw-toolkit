@@ -1,0 +1,210 @@
+{
+  "name": "mcu_esp32",
+  "requirements": {
+    "wireless": [
+      "ble"
+    ],
+    "pwm_channels": 0,
+    "i2c_buses": 1,
+    "spi_needed": false,
+    "uart_count": 1,
+    "adc_channels": 0,
+    "gpio_total": 10,
+    "clock_min": 64.0,
+    "flash_min": 256,
+    "ram_min": 64,
+    "vdd": 3.3,
+    "allowed_packages": [
+      "QFN",
+      "WLCSP",
+      "BGA",
+      "VFQFN"
+    ]
+  },
+  "actuals": {
+    "core": null,
+    "clock_mhz": 240.0,
+    "flash_kb": 16384,
+    "ram_kb": 8192,
+    "gpio_count": 45,
+    "pwm_channels": 8,
+    "i2c_count": 2,
+    "spi_count": 3,
+    "uart_count": 3,
+    "adc_channels": 13,
+    "usb_type": null,
+    "ble_version": "5.0",
+    "wifi": null,
+    "vdd_min": 3.0,
+    "vdd_max": 3.6,
+    "package": null,
+    "stock": null
+  },
+  "chosen_part": {
+    "lcsc": "C2913202",
+    "mpn": "ESP32-S3-WROOM-1-N16R8",
+    "manufacturer": "Espressif Systems",
+    "description": "",
+    "package": "SMD,25.5x18mm",
+    "price": 4.9049,
+    "price_tiers": {},
+    "stock": 27984,
+    "datasheet_url": "",
+    "library_type": "extended",
+    "qty_per_board": 1,
+    "notes": ""
+  },
+  "decisions": [
+    {
+      "timestamp": "2026-05-17T01:53:19+00:00",
+      "chosen": {
+        "lcsc": "C2913202",
+        "mpn": "ESP32-S3-WROOM-1-N16R8",
+        "manufacturer": "Espressif Systems",
+        "description": "",
+        "package": "SMD,25.5x18mm",
+        "price": 4.9049,
+        "price_tiers": {},
+        "stock": 27984,
+        "datasheet_url": "",
+        "library_type": "extended",
+        "qty_per_board": 1,
+        "notes": ""
+      },
+      "rejected": [],
+      "rationale": "Standard ESP32-S3 WiFi module with excellent stock, dual-core 240MHz, 16MB flash. Supports I2C, SPI, UART, GPIO for sensors and motors.",
+      "tradeoffs": [],
+      "accepted_warnings": [
+        "Package suitable"
+      ],
+      "alternate_lcsc": "",
+      "requirements_snapshot": {
+        "wireless": [
+          "ble"
+        ],
+        "pwm_channels": 0,
+        "i2c_buses": 1,
+        "spi_needed": false,
+        "uart_count": 1,
+        "adc_channels": 0,
+        "gpio_total": 10,
+        "clock_min": 64.0,
+        "flash_min": 256,
+        "ram_min": 64,
+        "vdd": 3.3,
+        "allowed_packages": [
+          "QFN",
+          "WLCSP",
+          "BGA",
+          "VFQFN"
+        ]
+      }
+    }
+  ],
+  "candidates_examined": [
+    {
+      "timestamp": "2026-05-17T01:53:15+00:00",
+      "lcsc": "C2913202",
+      "mpn": "ESP32-S3-WROOM-1-N16R8",
+      "manufacturer": "Espressif Systems",
+      "package": "SMD,25.5x18mm",
+      "price": 4.9049,
+      "stock": 27984,
+      "library_type": "",
+      "actuals": {
+        "vdd_min": 3,
+        "vdd_max": 3.6,
+        "ble_version": "5.0",
+        "gpio_count": 45,
+        "i2c_count": 2,
+        "spi_count": 3,
+        "uart_count": 3,
+        "pwm_channels": 8,
+        "adc_channels": 13,
+        "clock_mhz": 240,
+        "flash_kb": 16384,
+        "ram_kb": 8192,
+        "package": "SMD,25.5x18mm",
+        "stock": 27984
+      },
+      "verdict": "READY",
+      "checks": [
+        {
+          "name": "Supply voltage",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "3.0\u20133.6 V",
+          "required": "3.3 V",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Wireless",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "BLE=5.0, WiFi=no",
+          "required": "ble",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "GPIO count",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "45 GPIO",
+          "required": "\u2265 10",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Peripherals",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "OK",
+          "required": "all peripheral counts met",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Memory",
+          "severity": "hard",
+          "status": "pass",
+          "actual": "flash=16384kB, ram=8192kB",
+          "required": "flash\u2265256kB, ram\u226564kB",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Clock speed",
+          "severity": "soft",
+          "status": "pass",
+          "actual": "240.0 MHz",
+          "required": "\u2265 64.0 MHz",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Package suitable",
+          "severity": "soft",
+          "status": "fail",
+          "actual": "SMD,25.5x18mm",
+          "required": "QFN / WLCSP / BGA / VFQFN",
+          "missing_specs": [],
+          "note": ""
+        },
+        {
+          "name": "Stock threshold",
+          "severity": "soft",
+          "status": "pass",
+          "actual": "27,984 units",
+          "required": "\u2265 500 units",
+          "missing_specs": [],
+          "note": ""
+        }
+      ],
+      "calculations": {},
+      "notes": ""
+    }
+  ],
+  "category": "mcu_ble"
+}
