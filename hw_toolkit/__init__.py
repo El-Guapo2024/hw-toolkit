@@ -23,6 +23,14 @@ Typical use:
 
 Errors are typed exceptions, not strings. See `hw_toolkit.exceptions`.
 """
+__version__ = "0.2.0"
+
+# Silence kicad-sch-api's warning chatter during expected fallbacks (e.g.
+# `add_power` trying `power:+PWR_FLAG` first, then `power:PWR_FLAG`).
+# Engineer can re-raise verbosity via `logging.getLogger('kicad_sch_api')`.
+import logging as _logging
+_logging.getLogger("kicad_sch_api").setLevel(_logging.ERROR)
+
 from hw_toolkit import calc
 from hw_toolkit.board import Board, Module, Net
 from hw_toolkit.exceptions import (

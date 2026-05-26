@@ -119,6 +119,14 @@ class Net:
             )
         return out
 
+    def __repr__(self) -> str:
+        spec = (f"{self.voltage_v}V" if self.voltage_v is not None
+                else self.protocol or "—")
+        return (
+            f"Net(id={self.id!r}, type={self.type!r}, spec={spec!r}, "
+            f"members={len(self.members)})"
+        )
+
     def _repr_html_(self) -> str:
         members = ", ".join(f"<code>{s}.{p}</code>" for s, p in self.members)
         spec = (f"{self.voltage_v}V" if self.voltage_v is not None

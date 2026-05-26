@@ -4,9 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hw-toolkit"
-version = "0.1.0"
-description = "Hardware design agent + MCP servers (designer, router, live-edit)."
+version = "0.2.0"
+description = "Jupyter-first Python library for hardware (KiCad) schematic design: declare modules, nets (buckets), and export a finalized .kicad_sch zip ready for phase-2 hand-tune."
+readme = "README.md"
 requires-python = ">=3.11"
+license = {file = "LICENSE"}
+keywords = ["kicad", "hardware", "pcb", "schematic", "eda", "jupyter"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Manufacturing",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 dependencies = [
     "mcp[cli]>=1.0",
     "fastmcp>=0.1",
@@ -20,6 +35,9 @@ dependencies = [
     "pcborder @ file:///Users/juanantonioluera/ws/freight_flow_ai/hardware/pcborder",
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
 [project.scripts]
 designer-mcp = "mcp_server.designer.server:main"
 router-mcp   = "mcp_server.router.server:main"
@@ -29,3 +47,10 @@ hw-vis        = "hw_agent.visualizer.server:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["hw_agent*", "hw_toolkit*", "mcp_server*"]
+
+[tool.setuptools.package-data]
+hw_toolkit = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
