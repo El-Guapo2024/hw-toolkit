@@ -289,6 +289,35 @@ def _is_power_provider(pick: SubsystemPick) -> bool:
     return pick.category in {"buck_converter", "ldo", "power"}
 
 
+# Map common package strings → fully qualified KiCad `Library:Footprint`.
+# Anything not in this table renders with an empty `Footprint` property so
+# kicad-cli's ERC doesn't emit `footprint_link_issues` for unknown libs.
+# Engineer can override during phase-2 hand-tune.
+_PACKAGE_TO_KICAD_FP: dict[str, str] = {
+    "SOIC-8":      "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+    "SOIC-14":     "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm",
+    "SOIC-16":     "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm",
+    "TSSOP-8":     "Package_SO:TSSOP-8_3x3mm_P0.65mm",
+    "TSSOP-14":    "Package_SO:TSSOP-14_4.4x5mm_P0.65mm",
+    "TSSOP-16":    "Package_SO:TSSOP-16_4.4x5mm_P0.65mm",
+    "SOT-23":      "Package_TO_SOT_SMD:SOT-23",
+    "SOT-23-5":    "Package_TO_SOT_SMD:SOT-23-5",
+    "SOT-23-6":    "Package_TO_SOT_SMD:SOT-23-6",
+    "SOT-223":     "Package_TO_SOT_SMD:SOT-223",
+    "LGA-14":      "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y",
+    "DFN-8":       "Package_DFN_QFN:DFN-8-1EP_3x3mm_P0.65mm_EP1.5x2.4mm",
+    "QFN-16":      "Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm",
+    "QFN-32":      "Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm",
+}
+
+
+def _kicad_footprint_for(package: str) -> str:
+    """Translate a SubsystemPick.package into a fully qualified KiCad
+    `Library:Footprint` string, or empty if unknown. Empty avoids
+    kicad-cli's `footprint_link_issues` warning for unresolved libs."""
+    return _PACKAGE_TO_KICAD_FP.get(package, "")
+
+
 # ---------------------------------------------------------------------------
 # Planner
 # ---------------------------------------------------------------------------
@@ -323,6 +352,7 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
         # Merge auto-derived ports w/ any legacy port_bindings on the pick.
         ports = list(sub.port_bindings.keys()) + ports_by_sub.get(sub.id, [])
         pins = _synthesize_pins(sub, (cx, cy), ports=ports)
+        normalized_fp = _kicad_footprint_for(sub.package)
         ops.append(
             AddCustomIC(
                 kicad_sch=sch,
@@ -331,37 +361,119 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
                 at_x=cx,
                 at_y=cy,
                 pins=tuple(pins),
-                footprint=sub.package or None,
+                footprint=normalized_fp or None,
             )
         )
 
+    # Build the (refdes, port) → (x, y) lookup once after step 1 so the
+    # GND-symbol-to-IC-pin wire (step 2) + PWR_FLAG-to-hub-pin wire
+    # (step 4) can resolve coords without re-computing the layout math.
+    pin_xy_early: dict[tuple[str, str], tuple[float, float]] = {}
+    for op in ops:
+        if isinstance(op, AddCustomIC):
+            for p in op.pins:
+                pin_xy_early[(op.ref, p["name"])] = (
+                    float(p["at"][0]), float(p["at"][1]),
+                )
+
     # 2. Drop a GND symbol per subsystem ONLY if that subsystem has a GND
-    #    port participating in some net. Otherwise we'd leave floating
-    #    power_in pins that ERC flags as `power_pin_not_driven`.
+    #    port. The symbol is wired to the IC's GND pin so it actually
+    #    sits on the GND net (otherwise ERC sees it as a floating
+    #    `power_in` pin and emits `pin_not_connected`).
     for sub in bundle.subsystems:
         ports = ports_by_sub.get(sub.id, [])
-        if not any(p.upper() in _GROUND_NAMES for p in ports):
+        gnd_port = next((p for p in ports if p.upper() in _GROUND_NAMES), None)
+        if gnd_port is None:
             continue
         cx, cy = positions[sub.id]
+        gnd_y = _snap_grid(cy + _GROUND_DROP_MM)
         pwr_counter += 1
         ops.append(
             AddGround(
                 kicad_sch=sch,
                 ref=f"#PWR{pwr_counter:03d}",
                 at_x=cx,
-                at_y=_snap_grid(cy + _GROUND_DROP_MM),
+                at_y=gnd_y,
             )
         )
+        # Wire the GND symbol's anchor to the IC's GND pin.
+        ic_ref = refmap[sub.id]
+        ic_gnd_xy = pin_xy_early.get((ic_ref, gnd_port))
+        if ic_gnd_xy is not None:
+            ops.append(
+                AddWire(
+                    kicad_sch=sch,
+                    src=f"@{cx},{gnd_y}",
+                    dst=f"@{ic_gnd_xy[0]},{ic_gnd_xy[1]}",
+                )
+            )
 
-    # 3. Wires per interface — pin to pin (refdes.port format). The
-    #    floating per-consumer power-label drops from earlier versions are
-    #    GONE: they were unwired `power_in` symbols on isolated nets and
-    #    drove every ERC warning. KiCad infers the rail name from the
-    #    `power_out` pin (e.g. buck.VOUT) via wires alone; the engineer
-    #    can sprinkle visual labels during phase-2 hand-tune.
+    # 3. Wires per interface — pin to pin (refdes.port format).
     for iface in bundle.interfaces:
         for src, dst in _interface_wire_endpoints(iface, bundle, refmap):
             ops.append(AddWire(kicad_sch=sch, src=src, dst=dst))
+
+    # 4. PWR_FLAG per declared power net so KiCad ERC sees each rail as
+    #    driven (no more `power_pin_not_driven`). Place each flag offset
+    #    from the hub pin (first member of the net = star-expansion
+    #    source) and wire it back to that pin. GND rails carry voltage_v=0;
+    #    high-voltage rails (3V3/5V/etc.) get one PWR_FLAG each.
+    pin_xy: dict[tuple[str, str], tuple[float, float]] = {}
+    for op in ops:
+        if isinstance(op, AddCustomIC):
+            for p in op.pins:
+                pin_xy[(op.ref, p["name"])] = (
+                    float(p["at"][0]), float(p["at"][1]),
+                )
+
+    power_hubs: dict[tuple[str, str], Interface] = {}
+    for iface in bundle.interfaces:
+        if iface.type != "power":
+            continue
+        if iface.from_subsystem == "external":
+            continue
+        power_hubs.setdefault(
+            (iface.from_subsystem, iface.from_port), iface,
+        )
+
+    flag_offset_idx = 0
+    sub_by_id = {s.id: s for s in bundle.subsystems}
+    for (hub_sub, hub_port), iface in power_hubs.items():
+        hub_ref = refmap.get(hub_sub)
+        if hub_ref is None:
+            continue
+        hub_xy = pin_xy.get((hub_ref, hub_port))
+        if hub_xy is None:
+            continue
+        # Skip PWR_FLAG on rails that already have a `power_out` driver —
+        # KiCad ERC then complains about two power_out pins connected.
+        hub_pick = sub_by_id.get(hub_sub)
+        if hub_pick and _electrical_type(hub_pick, hub_port) == "power_out":
+            continue
+        # Place the PWR_FLAG one grid step away on the unused side; for
+        # right-side power-out pins that's `(hub_x + 7.62, hub_y - 7.62)`.
+        flag_x = _snap_grid(hub_xy[0] + 7.62)
+        flag_y = _snap_grid(hub_xy[1] - 7.62)
+        pwr_counter += 1
+        ops.append(
+            AddPower(
+                kicad_sch=sch,
+                ref=f"#FLG{pwr_counter:03d}",
+                label="PWR_FLAG",
+                at_x=flag_x,
+                at_y=flag_y,
+            )
+        )
+        # Wire PWR_FLAG anchor → hub pin (use @x,y form for both ends so
+        # apply_plan's coord pre-resolver doesn't double-translate).
+        ops.append(
+            AddWire(
+                kicad_sch=sch,
+                src=f"@{flag_x},{flag_y}",
+                dst=f"@{hub_xy[0]},{hub_xy[1]}",
+            )
+        )
+        flag_offset_idx += 1
 
     return SchematicPlan(kicad_sch=Path(sch_path), ops=tuple(ops))
 

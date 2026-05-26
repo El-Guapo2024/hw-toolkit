@@ -1,3 +1,0 @@
-(sym_lib_table
-  (lib (name "hwagent")(type "KiCad")(uri "${KIPRJMOD}/hwagent.kicad_sym")(options "")(descr ""))
-)

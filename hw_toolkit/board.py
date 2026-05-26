@@ -172,6 +172,23 @@ class Module:
     def manufacturer(self) -> str:
         return self.pick.manufacturer
 
+    # -------------------------------------------------- late-mutation setters
+    # Matplotlib-style chainable setters. Each returns self.
+    def set_value(self, value: str) -> "Module":
+        """Override the displayed Value field (defaults to mpn)."""
+        self.pick = self.pick.model_copy(update={"mpn": value})
+        return self
+
+    def set_footprint(self, footprint: str) -> "Module":
+        """Override the Footprint field (`Library:Footprint` form)."""
+        self.pick = self.pick.model_copy(update={"package": footprint})
+        return self
+
+    def attach(self, math: Any) -> "Module":
+        """Attach a math/calc result (chainable form of `.math = ...`)."""
+        self.math = math
+        return self
+
     def check(self, condition: Any, *, label: str = "") -> "Module":
         """Assert + record. Raises `CheckFailed` on falsy condition.
 
@@ -281,6 +298,37 @@ class Board:
         assert isinstance(result, Module)
         return result
 
+    # ---------------------------------------------- factory shortcuts
+    def power(self, id: str, voltage_v: float) -> Net:
+        """Sugar for `board.net(id, type="power", voltage_v=voltage_v)`.
+
+            >>> v3v3 = board.power("3v3", 3.3)
+            >>> v3v3 += "buck.VOUT", "mcu.VDD"
+        """
+        return self.net(id, type="power", voltage_v=voltage_v)
+
+    def gnd(self, id: str = "gnd") -> Net:
+        """Sugar for a 0V GND net.
+
+            >>> g = board.gnd()
+            >>> g += "buck.GND", "mcu.GND"
+        """
+        return self.net(id, type="power", voltage_v=0)
+
+    def i2c(self, id: str) -> tuple[Net, Net]:
+        """Build a paired SDA/SCL bus. Returns `(sda, scl)`.
+
+            >>> sda, scl = board.i2c("bus0")
+            >>> sda += "mcu.SDA", "imu.SDA"; scl += "mcu.SCL", "imu.SCL"
+        """
+        sda = self.net(f"{id}_sda", type="data", protocol="i2c")
+        scl = self.net(f"{id}_scl", type="data", protocol="i2c")
+        return sda, scl
+
+    def signal(self, id: str, protocol: str = "uart") -> Net:
+        """Sugar for `board.net(id, type="data", protocol=protocol)`."""
+        return self.net(id, type="data", protocol=protocol)
+
     def net(
         self,
         id: str,
@@ -346,6 +394,36 @@ class Board:
                 subsystem_id=subsystem_id,
                 known=tuple(self._modules.keys()),
             ) from None
+
+    # ----------------------------------------------------- introspection
+    @property
+    def parts(self) -> dict[str, Module]:
+        """Read-only mapping `subsystem_id → Module`. Use for iteration."""
+        return dict(self._modules)
+
+    @property
+    def nets(self) -> dict[str, Net]:
+        """Read-only mapping `net_id → Net`."""
+        return {n.id: n for n in self._nets}
+
+    def summary(self) -> str:
+        """One-screen text overview of the board: parts, nets, checks."""
+        lines = [f"Board {self.project_id!r}"]
+        lines.append(f"  parts ({len(self._modules)}):")
+        for m in self._modules.values():
+            math = f"  math={type(m.math).__name__}" if m.math is not None else ""
+            checks = f"  checks={len(m.notes)}" if m.notes else ""
+            lines.append(
+                f"    {m.id:14} {m.mpn:30} {m.package or '-':14}"
+                f"  ${m.price_usd:>5.2f}{math}{checks}"
+            )
+        lines.append(f"  nets ({len(self._nets)}):")
+        for n in self._nets:
+            spec = (f"{n.voltage_v}V" if n.voltage_v is not None
+                    else n.protocol or "")
+            members = ", ".join(f"{s}.{p}" for s, p in n.members)
+            lines.append(f"    {n.id:14} [{n.type:5} {spec:5}]  {members}")
+        return "\n".join(lines)
 
     # ----------------------------------------------------- pydantic view
     @property

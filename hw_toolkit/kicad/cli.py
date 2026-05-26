@@ -119,6 +119,12 @@ def render_sch_svg(sch_path: str | Path, out_dir: str | Path | None = None) -> P
 def erc_json(sch_path: str | Path, out_path: str | Path | None = None) -> Path:
     """Run ERC and write JSON report. Returns the report path.
 
+    Passes `KIPRJMOD=<sch.parent>` via `--define-var` so the project-local
+    `sym-lib-table` (which interpolates `${KIPRJMOD}/hwagent.kicad_sym`)
+    resolves correctly. Without this, kicad-cli warns about
+    `lib_symbol_issues` even though the lib file is sitting next to the
+    .kicad_sch.
+
     Does NOT raise on violations — parsing is the caller's job
     (`Board.check_erc()` parses + raises typed errors).
     """
@@ -128,6 +134,7 @@ def erc_json(sch_path: str | Path, out_path: str | Path | None = None) -> Path:
     _run([
         "sch", "erc",
         "-o", str(report),
+        "-D", f"KIPRJMOD={sch.parent}",
         "--format", "json",
         "--severity-all",
         str(sch),
