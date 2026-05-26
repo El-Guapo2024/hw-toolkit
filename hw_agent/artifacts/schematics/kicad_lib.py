@@ -15,6 +15,7 @@ Pin angle convention: angle = direction from outer (tip) end TOWARD the body.
 
 from __future__ import annotations
 
+import contextvars
 import math
 import os
 from dataclasses import dataclass, field
@@ -33,11 +34,37 @@ DEFAULT_LIB_PATHS = [
     Path.home() / ".local/share/kicad/symbols",
 ]
 
+# Project-local lib dirs held in a contextvar so concurrent Boards (multi-
+# kernel, async cells, threadpool) each see their own search path without
+# clobbering siblings. Use `register_extra_lib_path` to append.
+_extra_lib_paths: contextvars.ContextVar[tuple[Path, ...]] = contextvars.ContextVar(
+    "hw_toolkit_extra_lib_paths", default=()
+)
+
+
+def register_extra_lib_path(path: Path) -> None:
+    """Add a directory to the symbol-library search path. Idempotent.
+
+    Project-local `hwagent.kicad_sym` files synthesized by `add_custom_ic`
+    don't live on the system search paths, so `_find_lib` needs them
+    registered here before `add_wire`'s pin resolver can find them.
+
+    Scoped to the current contextvars context (per-task / per-thread).
+    """
+    p = Path(path)
+    current = _extra_lib_paths.get()
+    if p not in current:
+        _extra_lib_paths.set(current + (p,))
+
 
 def _find_lib(lib_name: str) -> Path:
     """Locate a .kicad_sym file by library name (e.g. 'Regulator_Linear')."""
     env = os.environ.get("KICAD_SYMBOL_DIR")
-    paths = ([Path(env)] if env else []) + DEFAULT_LIB_PATHS
+    paths = (
+        ([Path(env)] if env else [])
+        + list(_extra_lib_paths.get())
+        + DEFAULT_LIB_PATHS
+    )
     for base in paths:
         candidate = base / f"{lib_name}.kicad_sym"
         if candidate.exists():

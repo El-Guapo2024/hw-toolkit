@@ -23,7 +23,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Iterable, Literal
 
 from hw_agent.agents.pcb_designer.kicad_projector import refdes_map_for_bundle
 from hw_agent.core import Interface, ResearchBundle, SubsystemPick
@@ -165,15 +165,22 @@ class SynthPin:
     at: tuple[float, float]  # absolute mm relative to schematic origin
 
 
-def _synthesize_pins(pick: SubsystemPick, body_center: tuple[float, float]) -> list[dict[str, object]]:
+def _synthesize_pins(
+    pick: SubsystemPick,
+    body_center: tuple[float, float],
+    ports: Iterable[str] | None = None,
+) -> list[dict[str, object]]:
     """Pick a side per port name and emit add_custom_ic pin dicts.
+
+    `ports` is the explicit list of port names to render. If `None`, the
+    function falls back to `pick.port_bindings.keys()` for back-compat with
+    the old researcher-driven flow. The new notebook flow passes the port
+    set derived from the bundle's interfaces.
 
     Heuristic:
       power-in   (VIN, VBAT)            → left
       power-out  (VOUT, VDD, VCC, 3V3)  → right (for buck/LDO providers)
-                                          left  (for consumers — but
-                                          designer-mcp doesn't care which
-                                          side, ergonomics only)
+                                          left  (for consumers)
       ground     (GND, VSS)             → bottom
       I²C / SPI  (SDA, SCL, MISO, MOSI) → right
       default                           → right
@@ -185,10 +192,20 @@ def _synthesize_pins(pick: SubsystemPick, body_center: tuple[float, float]) -> l
     half_w = _IC_BODY_W_MM / 2
     half_h = _IC_BODY_H_MM / 2
 
+    if ports is None:
+        ports = list(pick.port_bindings.keys())
+    # de-dup while preserving first-seen order
+    seen: set[str] = set()
+    unique_ports: list[str] = []
+    for p in ports:
+        if p not in seen:
+            seen.add(p)
+            unique_ports.append(p)
+
     buckets: dict[str, list[str]] = {
         "left": [], "right": [], "top": [], "bottom": [],
     }
-    for port in pick.port_bindings.keys():
+    for port in unique_ports:
         side = _classify_port(pick, port)
         buckets[side].append(port)
 
@@ -201,14 +218,51 @@ def _synthesize_pins(pick: SubsystemPick, body_center: tuple[float, float]) -> l
             spacing = _IC_BODY_H_MM / (len(names) + 1)
             for i, name in enumerate(names, start=1):
                 y = cy - half_h + spacing * i
-                pins.append({"name": name, "at": [round(x, 3), round(y, 3)], "side": side})
+                pins.append({
+                    "name": name,
+                    "at": [_snap_grid(x), _snap_grid(y)],
+                    "side": side,
+                    "electrical_type": _electrical_type(pick, name),
+                })
         else:  # top / bottom
             y = cy - half_h if side == "top" else cy + half_h
             spacing = _IC_BODY_W_MM / (len(names) + 1)
             for i, name in enumerate(names, start=1):
                 x = cx - half_w + spacing * i
-                pins.append({"name": name, "at": [round(x, 3), round(y, 3)], "side": side})
+                pins.append({
+                    "name": name,
+                    "at": [_snap_grid(x), _snap_grid(y)],
+                    "side": side,
+                    "electrical_type": _electrical_type(pick, name),
+                })
     return pins
+
+
+def _electrical_type(pick: SubsystemPick, port: str) -> str:
+    """Map a port name to a KiCad pin electrical_type.
+
+    Power providers (buck/LDO) emit `power_out` on VOUT; consumers see
+    VDD/VCC as `power_in`. GND/VIN are always `power_in`. Signals are
+    `bidirectional` (good default for I²C/SPI). KiCad's ERC uses this
+    to validate `power_pin_not_driven`.
+    """
+    p = port.upper()
+    if p in _GROUND_NAMES or p in _POWER_IN_NAMES:
+        return "power_in"
+    if p in _POWER_OUT_NAMES:
+        return "power_out" if _is_power_provider(pick) else "power_in"
+    if p in _RIGHT_SIG_NAMES:
+        return "bidirectional"
+    return "passive"
+
+
+# KiCad schematic grid is 1.27 mm (50 mil). Wires + pins must land on it
+# or ERC raises `endpoint_off_grid` warnings and `wire_dangling` errors.
+_GRID_MM = 1.27
+
+
+def _snap_grid(v: float) -> float:
+    return round(v / _GRID_MM) * _GRID_MM
 
 
 _GROUND_NAMES = {"GND", "VSS", "GROUND", "AGND", "DGND", "PGND"}
@@ -249,14 +303,26 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
     refmap = refdes_map_for_bundle(bundle)
     pwr_counter = 0
 
+    # Derive each subsystem's port set from the bundle's interfaces.
+    # The notebook flow never sets `subsystem.port_bindings` directly —
+    # nets/connects produce interfaces, and ports fall out of those.
+    ports_by_sub: dict[str, list[str]] = {s.id: [] for s in bundle.subsystems}
+    for iface in bundle.interfaces:
+        if iface.from_subsystem in ports_by_sub:
+            ports_by_sub[iface.from_subsystem].append(iface.from_port)
+        if iface.to_subsystem in ports_by_sub:
+            ports_by_sub[iface.to_subsystem].append(iface.to_port)
+
     # 1. Place one custom IC per subsystem on a horizontal lane.
     positions: dict[str, tuple[float, float]] = {}
     for i, sub in enumerate(bundle.subsystems):
-        cx = _LANE_X_START_MM + i * _LANE_X_STEP_MM
-        cy = _LANE_Y_MM
+        cx = _snap_grid(_LANE_X_START_MM + i * _LANE_X_STEP_MM)
+        cy = _snap_grid(_LANE_Y_MM)
         positions[sub.id] = (cx, cy)
         ref = refmap[sub.id]
-        pins = _synthesize_pins(sub, (cx, cy))
+        # Merge auto-derived ports w/ any legacy port_bindings on the pick.
+        ports = list(sub.port_bindings.keys()) + ports_by_sub.get(sub.id, [])
+        pins = _synthesize_pins(sub, (cx, cy), ports=ports)
         ops.append(
             AddCustomIC(
                 kicad_sch=sch,
@@ -269,8 +335,13 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
             )
         )
 
-    # 2. Drop GND symbol below each subsystem (every IC needs GND).
+    # 2. Drop a GND symbol per subsystem ONLY if that subsystem has a GND
+    #    port participating in some net. Otherwise we'd leave floating
+    #    power_in pins that ERC flags as `power_pin_not_driven`.
     for sub in bundle.subsystems:
+        ports = ports_by_sub.get(sub.id, [])
+        if not any(p.upper() in _GROUND_NAMES for p in ports):
+            continue
         cx, cy = positions[sub.id]
         pwr_counter += 1
         ops.append(
@@ -278,31 +349,16 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
                 kicad_sch=sch,
                 ref=f"#PWR{pwr_counter:03d}",
                 at_x=cx,
-                at_y=cy + _GROUND_DROP_MM,
+                at_y=_snap_grid(cy + _GROUND_DROP_MM),
             )
         )
 
-    # 3. For each power interface, drop a labelled power symbol at the
-    #    consumer side so eeschema renders the rail name visibly.
-    for iface in bundle.interfaces:
-        if iface.type != "power":
-            continue
-        if iface.to_subsystem == "external":
-            continue
-        label = _label_for_power_interface(iface)
-        cx, cy = positions[iface.to_subsystem]
-        pwr_counter += 1
-        ops.append(
-            AddPower(
-                kicad_sch=sch,
-                ref=f"#PWR{pwr_counter:03d}",
-                label=label,
-                at_x=cx,
-                at_y=cy - _POWER_DROP_MM,
-            )
-        )
-
-    # 4. Wires per interface — pin to pin (refdes.port format).
+    # 3. Wires per interface — pin to pin (refdes.port format). The
+    #    floating per-consumer power-label drops from earlier versions are
+    #    GONE: they were unwired `power_in` symbols on isolated nets and
+    #    drove every ERC warning. KiCad infers the rail name from the
+    #    `power_out` pin (e.g. buck.VOUT) via wires alone; the engineer
+    #    can sprinkle visual labels during phase-2 hand-tune.
     for iface in bundle.interfaces:
         for src, dst in _interface_wire_endpoints(iface, bundle, refmap):
             ops.append(AddWire(kicad_sch=sch, src=src, dst=dst))
@@ -312,13 +368,16 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
 
 def _label_for_power_interface(iface: Interface) -> str:
     """Pick a KiCad power-label string from the rail's nominal voltage."""
+    import math
     v = iface.voltage_nominal_v
     if v is None:
         return "VCC"
-    # Common rails get canonical names; otherwise stringify as V<n>V<d>.
+    if math.isclose(v, 0.0, abs_tol=1e-6):
+        return "GND"
     canon = {3.3: "3V3", 5.0: "5V", 12.0: "12V", 24.0: "24V"}
-    if v in canon:
-        return canon[v]
+    for canon_v, label in canon.items():
+        if math.isclose(v, canon_v, rel_tol=1e-3, abs_tol=1e-3):
+            return label
     whole = int(v)
     frac = round((v - whole) * 10)
     return f"{whole}V{frac}" if frac else f"{whole}V"

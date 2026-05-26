@@ -59,8 +59,8 @@ class Interface(BaseModel):
     to_subsystem: str = Field(min_length=1, max_length=64)
     to_port: str = Field(min_length=1, max_length=32)
 
-    # Power-specific
-    voltage_nominal_v: float | None = Field(default=None, gt=0)
+    # Power-specific. GND nets carry voltage_nominal_v = 0.0.
+    voltage_nominal_v: float | None = Field(default=None, ge=0)
     current_continuous_max_a: float | None = Field(default=None, gt=0)
     current_peak_max_a: float | None = Field(default=None, gt=0)
 

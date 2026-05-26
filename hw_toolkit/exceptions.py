@@ -17,6 +17,58 @@ class HwToolkitError(Exception):
 
 
 # ---------------------------------------------------------------------------
+# Notebook-time failures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class CheckFailed(HwToolkitError):
+    """A `Module.check()` assertion failed.
+
+    Lets `except hw.HwToolkitError` catch the failure uniformly with the
+    rest of the typed hierarchy (previously raised a bare AssertionError).
+    """
+    subsystem_id: str
+    label: str
+
+    def __str__(self) -> str:
+        return f"CheckFailed[{self.subsystem_id}]: {self.label}"
+
+
+@dataclass
+class UnknownSubsystemError(HwToolkitError):
+    """`board[id]` referenced a subsystem that wasn't `.module()`'d."""
+    subsystem_id: str
+    known: tuple[str, ...] = ()
+
+    def __str__(self) -> str:
+        kn = f" (known: {', '.join(self.known)})" if self.known else ""
+        return f"UnknownSubsystemError: {self.subsystem_id!r}{kn}"
+
+
+@dataclass
+class DuplicateNetError(HwToolkitError):
+    """`board.net()` called twice with the same id."""
+    net_id: str
+
+    def __str__(self) -> str:
+        return f"DuplicateNetError: net {self.net_id!r} already exists"
+
+
+@dataclass
+class EmptyNetError(HwToolkitError):
+    """A declared net has fewer than 2 members at bundle time."""
+    net_id: str
+    member_count: int
+
+    def __str__(self) -> str:
+        return (
+            f"EmptyNetError: net {self.net_id!r} has only {self.member_count} "
+            f"member(s); need ≥2 to form a connection"
+        )
+
+
+# ---------------------------------------------------------------------------
 # Load-time failures
 # ---------------------------------------------------------------------------
 

@@ -173,8 +173,11 @@ def synthesize_ic_lib_symbol(
         local_x = _snap(px - cx)
         local_y = _snap(cy - py)  # Y-flip for lib_symbol Y-up convention
         angle = _PIN_ANGLE_BY_SIDE.get(p.get("side", "left"), 180)
+        # Optional electrical_type per pin — KiCad uses it for ERC
+        # "power_pin_not_driven" checks. Defaults to `passive` (back-compat).
+        elec = p.get("electrical_type", "passive")
         pin_blocks.append(
-            f'      (pin passive line (at {local_x} {local_y} {angle}) (length 2.54)\n'
+            f'      (pin {elec} line (at {local_x} {local_y} {angle}) (length 2.54)\n'
             f'        (name "{p["name"]}" (effects (font (size 1.27 1.27))))\n'
             f'        (number "{i}" (effects (font (size 1.27 1.27))))\n'
             f'      )\n'
