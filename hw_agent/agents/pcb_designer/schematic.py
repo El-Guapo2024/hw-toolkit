@@ -408,9 +408,55 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
                 )
             )
 
-    # 3. Wires per interface — pin to pin (refdes.port format).
+    # 3. Wires per interface — pin to pin. Group star-expanded
+    #    interfaces by their shared source so colinear consumers (same Y
+    #    or same X as the hub) collapse to one straight wire instead of
+    #    two overlapping wires that KiCad splinters into `wire_dangling`
+    #    sub-pixel fragments.
+    wires_by_src: dict[str, list[str]] = {}
     for iface in bundle.interfaces:
         for src, dst in _interface_wire_endpoints(iface, bundle, refmap):
+            wires_by_src.setdefault(src, []).append(dst)
+
+    def _resolve(endpoint: str) -> tuple[float, float] | None:
+        if "." not in endpoint:
+            return None
+        ref, port = endpoint.split(".", 1)
+        return pin_xy_early.get((ref, port))
+
+    for src, dsts in wires_by_src.items():
+        src_xy = _resolve(src)
+        if src_xy is not None and len(dsts) > 1:
+            # Chain colinear consumers (hub → c1 → c2 → c3) so each pin
+            # sits at a wire endpoint. KiCad treats wire-to-pin endpoint
+            # contacts as connected without needing junction markers;
+            # mid-segment pins would otherwise read as "not driven".
+            dst_xys = [_resolve(d) for d in dsts]
+            if all(xy is not None for xy in dst_xys):
+                ys = {round(xy[1], 4) for xy in dst_xys}  # type: ignore[index]
+                xs = {round(xy[0], 4) for xy in dst_xys}  # type: ignore[index]
+                if len(ys) == 1 and round(src_xy[1], 4) in ys:
+                    # All horizontal; chain by ascending |x - src_x|.
+                    ordered = sorted(
+                        zip(dsts, dst_xys),
+                        key=lambda pair: abs(pair[1][0] - src_xy[0]),  # type: ignore[index]
+                    )
+                    prev = src
+                    for dst_name, xy in ordered:
+                        ops.append(AddWire(kicad_sch=sch, src=prev, dst=dst_name))
+                        prev = dst_name
+                    continue
+                if len(xs) == 1 and round(src_xy[0], 4) in xs:
+                    ordered = sorted(
+                        zip(dsts, dst_xys),
+                        key=lambda pair: abs(pair[1][1] - src_xy[1]),  # type: ignore[index]
+                    )
+                    prev = src
+                    for dst_name, xy in ordered:
+                        ops.append(AddWire(kicad_sch=sch, src=prev, dst=dst_name))
+                        prev = dst_name
+                    continue
+        for dst in dsts:
             ops.append(AddWire(kicad_sch=sch, src=src, dst=dst))
 
     # 4. PWR_FLAG per declared power net so KiCad ERC sees each rail as
@@ -450,10 +496,11 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
         hub_pick = sub_by_id.get(hub_sub)
         if hub_pick and _electrical_type(hub_pick, hub_port) == "power_out":
             continue
-        # Place the PWR_FLAG one grid step away on the unused side; for
-        # right-side power-out pins that's `(hub_x + 7.62, hub_y - 7.62)`.
-        flag_x = _snap_grid(hub_xy[0] + 7.62)
-        flag_y = _snap_grid(hub_xy[1] - 7.62)
+        # Place the PWR_FLAG on the SAME row as the hub pin (axis-aligned
+        # wire — KiCad gets unhappy with diagonal wires and breaks them
+        # into sub-pixel segments that trigger `wire_dangling`).
+        flag_x = _snap_grid(hub_xy[0] + 10.16)  # 8 grid steps right
+        flag_y = hub_xy[1]                       # same Y → horizontal wire
         pwr_counter += 1
         ops.append(
             AddPower(
@@ -464,8 +511,6 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
                 at_y=flag_y,
             )
         )
-        # Wire PWR_FLAG anchor → hub pin (use @x,y form for both ends so
-        # apply_plan's coord pre-resolver doesn't double-translate).
         ops.append(
             AddWire(
                 kicad_sch=sch,

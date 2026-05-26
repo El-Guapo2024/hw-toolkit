@@ -126,6 +126,14 @@ def write_populated(
             sch_path.parent / "sym-lib-table",
         ):
             stale.unlink(missing_ok=True)
+    # kicad-sch-api caches lib parses by path. Clear so we re-read the
+    # freshly synthesized `hwagent.kicad_sym` instead of returning a
+    # stale (e.g. empty-pin) version from an earlier `module.show()` call.
+    try:
+        from kicad_sch_api.library.cache import get_symbol_cache
+        get_symbol_cache().clear_cache()
+    except Exception:
+        pass
     write_blank_schematic(sch_path, overwrite=overwrite)
     plan = plan_schematic(bundle, sch_path)
     apply_plan(plan)
