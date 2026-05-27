@@ -1,6 +1,6 @@
 """Apply a `SchematicPlan` to a `.kicad_sch` file (pure Python, no MCP).
 
-The planner (`hw_agent.agents.pcb_designer.schematic.plan_schematic`) returns
+The planner (`hw_toolkit.kicad.planner.plan_schematic`) returns
 a `SchematicPlan` whose ops historically dispatched via designer-mcp tools.
 This module walks the plan and calls the matching `sch_ops.add_*` function
 directly so a notebook cell can produce a fully populated `.kicad_sch`
@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from hw_agent.agents.pcb_designer.schematic import (
+from hw_toolkit.kicad.planner import (
     AddCustomIC,
     AddGround,
     AddPower,
@@ -19,8 +19,8 @@ from hw_agent.agents.pcb_designer.schematic import (
     plan_schematic,
     write_blank_schematic,
 )
-from hw_agent.artifacts.schematics import kicad_lib, sch_ops
-from hw_agent.core import ResearchBundle
+from hw_toolkit.kicad import lib as kicad_lib, sch_ops
+from hw_toolkit.core import ResearchBundle
 
 
 def apply_plan(plan: SchematicPlan) -> Path:

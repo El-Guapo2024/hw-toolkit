@@ -1,6 +1,6 @@
 """`hw.calc` — engineering math wrappers.
 
-Each class wraps a stateless calc module (`hw_agent.domain.calculations.*`)
+Each class wraps a stateless calc module (`hw_toolkit.calc._buck_math` etc.)
 behind a typed object. Construct with operating-point inputs, call
 methods, get typed result dataclasses back.
 

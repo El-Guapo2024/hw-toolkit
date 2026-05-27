@@ -6,7 +6,7 @@ v1 scope: schematic only. One `Board`, module-per-cell, finalized
 Typical use:
 
     >>> import hw_toolkit as hw
-    >>> from hw_agent.core import SubsystemPick
+    >>> from hw_toolkit.core import SubsystemPick
     >>>
     >>> board = hw.Board("control_hub_v1")
     >>> buck = board.add(SubsystemPick(id="buck_3v3",

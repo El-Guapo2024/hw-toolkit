@@ -28,12 +28,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, Union
 
-from hw_agent.agents.pcb_designer.schematic import (
+from hw_toolkit.kicad.planner import (
     SchematicPlan,
     parse_erc_report,
     plan_schematic,
 )
-from hw_agent.core import Interface, ResearchBundle, SubsystemPick
+from hw_toolkit.core import Interface, ResearchBundle, SubsystemPick
 
 from hw_toolkit.exceptions import (
     BundleValidationError,

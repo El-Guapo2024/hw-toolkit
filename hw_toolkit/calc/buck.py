@@ -1,4 +1,4 @@
-"""`hw.calc.Buck` — object wrapper around hw_agent.domain.calculations.buck.
+"""`hw.calc.Buck` — object wrapper around the buck operating-point math.
 
 The underlying functions return dicts. The wrapper holds buck-operating-
 point state (vin, vout, iout, fsw, ripple_pct), runs the calcs, and
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from hw_agent.domain.calculations import buck as _buck
+from hw_toolkit.calc import _buck_math as _buck
 
 
 # ---------------------------------------------------------------------------

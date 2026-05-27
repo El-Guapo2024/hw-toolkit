@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 
-from hw_agent.core import Interface, ResearchBundle
+from hw_toolkit.core import Interface, ResearchBundle
 
 
 def emit_spice_netlist(bundle: ResearchBundle, *, title: str | None = None) -> str:
