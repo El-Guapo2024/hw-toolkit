@@ -30,9 +30,20 @@ hw_agent/.live/
 
 # generated artifacts (regenerable)
 docs/projects/*/render/
+docs/projects/*/*.executed.ipynb
+docs/projects/*/*.zip
+docs/projects/*/control_hub_v1/
+docs/projects/*/cnc_mini_v1/
+docs/projects/*/rc_car_v1/
+docs/projects/*/kicad/
+docs/projects/*/.live/
 
 # packaging
 *.egg-info/
+.pytest_cache/
 
 # sub-agent test scratch projects
 docs/projects/test_*/
+
+# Claude worktrees (scratch)
+.claude/worktrees/

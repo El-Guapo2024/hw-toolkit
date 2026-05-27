@@ -669,6 +669,16 @@ class Board:
         )
 
     def _repr_html_(self) -> str:
+        # Fresh boards have no parts yet; the bundle validator (`min_length=1`
+        # on subsystems) would treat that as "invalid". Render the empty
+        # state as a friendly placeholder so the engineer's first
+        # `board` cell isn't a red error.
+        if not self._subsystems:
+            return (
+                f"<h4>Board <code>{self.project_id}</code> "
+                "<span style='color:#888'>(empty — add parts with "
+                "<code>board.module(...)</code>)</span></h4>"
+            )
         try:
             return self.bundle._repr_html_()
         except BundleValidationError as e:
