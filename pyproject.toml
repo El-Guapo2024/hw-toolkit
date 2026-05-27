@@ -42,7 +42,6 @@ test = ["pytest>=8.0"]
 designer-mcp = "mcp_server.designer.server:main"
 router-mcp   = "mcp_server.router.server:main"
 live-edit-mcp = "mcp_server.live_edit.server:main"
-hw-vis        = "hw_agent.visualizer.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
