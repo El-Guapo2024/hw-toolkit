@@ -29,6 +29,7 @@ __all__ = [
     "apply_plan",
     "erc_json",
     "find_cli",
+    "mark_scratch",
     "render_sch_svg",
     "write_populated",
 ]

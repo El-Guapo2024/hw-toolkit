@@ -28,12 +28,14 @@ __version__ = "0.2.0"
 # Silence kicad-sch-api's warning chatter during expected fallbacks (e.g.
 # `add_power` trying `power:+PWR_FLAG` first, then `power:PWR_FLAG`).
 # Engineer can re-raise verbosity via `logging.getLogger('kicad_sch_api')`.
-import logging as _logging
+# Must precede downstream imports — they load kicad_sch_api eagerly.
+import logging as _logging  # noqa: E402  (deliberate ordering)
+
 _logging.getLogger("kicad_sch_api").setLevel(_logging.ERROR)
 
-from hw_toolkit import calc
-from hw_toolkit.board import Board, Module, Net
-from hw_toolkit.exceptions import (
+from hw_toolkit import calc  # noqa: E402
+from hw_toolkit.board import Board, Module, Net  # noqa: E402
+from hw_toolkit.exceptions import (  # noqa: E402
     BundleValidationError,
     CheckFailed,
     DRCViolation,
@@ -48,7 +50,7 @@ from hw_toolkit.exceptions import (
     RoutingFailedError,
     UnknownSubsystemError,
 )
-from hw_toolkit.kicad import (
+from hw_toolkit.kicad import (  # noqa: E402
     KiCadCliMissingError,
     KiCadCliRunError,
     KiCadCliTimeoutError,

@@ -26,7 +26,7 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Literal, Union
+from typing import Any, Literal, Union
 
 from hw_agent.agents.pcb_designer.schematic import (
     SchematicPlan,
@@ -45,6 +45,7 @@ from hw_toolkit.exceptions import (
     UnknownSubsystemError,
 )
 from hw_toolkit.kicad import erc_json, mark_scratch, render_sch_svg, write_populated
+from hw_toolkit.spice import emit_spice_netlist
 
 DEFAULT_PROJECTS_ROOT = Path("docs/projects")
 
@@ -595,6 +596,32 @@ class Board:
             for f in files:
                 shutil.copy2(f, unpacked / f.name)
         return zip_path
+
+    # ---------------------------------------------------- second backend
+    def export_spice(self, path: str | Path) -> Path:
+        """Write a Berkeley-SPICE netlist (`.cir`) of the current state.
+
+        Topology only — no component models embedded. The engineer is
+        expected to `.INCLUDE` their own model files before running
+        ngspice / LTspice. Each subsystem maps to one `X<refdes>`
+        subcircuit call referencing `<MPN>` as the subckt name.
+
+            >>> board.export_spice("control_hub_v1.cir")
+            PosixPath('/.../control_hub_v1.cir')
+        """
+        path = Path(path).expanduser().resolve()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(emit_spice_netlist(self.bundle), encoding="utf-8")
+        return path
+
+    @property
+    def spice(self) -> str:
+        """SPICE netlist as a string. Cheap — computes from in-memory state.
+
+            >>> print(board.spice)
+            * control_hub_v1 — netlist ...
+        """
+        return emit_spice_netlist(self.bundle)
 
     def check_erc(
         self,
