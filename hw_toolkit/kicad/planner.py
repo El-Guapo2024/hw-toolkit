@@ -238,19 +238,27 @@ def _synthesize_pins(
     return pins
 
 
+_PROVIDER_OUTPUT_PORTS = {"VOUT", "VOUT1", "VOUT2"}
+
+
 def _electrical_type(pick: SubsystemPick, port: str) -> str:
     """Map a port name to a KiCad pin electrical_type.
 
-    Power providers (buck/LDO) emit `power_out` on VOUT; consumers see
-    VDD/VCC as `power_in`. GND/VIN are always `power_in`. Signals are
-    `bidirectional` (good default for I²C/SPI). KiCad's ERC uses this
-    to validate `power_pin_not_driven`.
+    Only the canonical output port name(s) on a power provider IC count
+    as `power_out` — VDD/VCC on a buck is a bias-input pin, NOT an
+    output, even though the category is `buck_converter`. Previously
+    everything in `_POWER_OUT_NAMES` was promoted to `power_out` on
+    provider ICs, which mis-tagged buck.VDD as a power source.
+
+    KiCad's ERC uses this to validate `power_pin_not_driven`.
     """
     p = port.upper()
     if p in _GROUND_NAMES or p in _POWER_IN_NAMES:
         return "power_in"
+    if p in _PROVIDER_OUTPUT_PORTS and _is_power_provider(pick):
+        return "power_out"
     if p in _POWER_OUT_NAMES:
-        return "power_out" if _is_power_provider(pick) else "power_in"
+        return "power_in"  # VDD/VCC/3V3/5V/etc — always a bias/rail input
     if p in _RIGHT_SIG_NAMES:
         return "bidirectional"
     return "passive"

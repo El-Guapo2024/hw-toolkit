@@ -284,8 +284,10 @@ def _parse_symbol_node(node) -> KicadSymbol:
 
 
 @lru_cache(maxsize=32)
-def _parse_lib_file(lib_path: Path) -> dict[str, KicadSymbol]:
-    """Parse a complete .kicad_sym file. Cached by path."""
+def _parse_lib_file_cached(lib_path: Path, mtime_ns: int) -> dict[str, KicadSymbol]:
+    """Inner cached parse — keyed on (path, mtime) so file rewrites
+    invalidate the cache."""
+    _ = mtime_ns  # cache key only; not used directly
     text = lib_path.read_text()
     parsed = sexpdata.loads(text)
     symbols = {}
@@ -294,6 +296,14 @@ def _parse_lib_file(lib_path: Path) -> dict[str, KicadSymbol]:
             sym = _parse_symbol_node(node)
             symbols[sym.name] = sym
     return symbols
+
+
+def _parse_lib_file(lib_path: Path) -> dict[str, KicadSymbol]:
+    """Parse a complete .kicad_sym file. Cached by (path, mtime) so
+    rewriting the lib (e.g. by `sch_ops.add_custom_ic`) invalidates the
+    cache automatically — fixes stale-pin bugs when the same lib path is
+    rewritten across multiple `module.show()` calls."""
+    return _parse_lib_file_cached(lib_path, lib_path.stat().st_mtime_ns)
 
 
 def load_symbol(lib_id: str) -> KicadSymbol:

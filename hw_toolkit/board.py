@@ -270,6 +270,17 @@ class Board:
         self._interfaces: list[Interface] = []
         self._nets: list[Net] = []
         self._modules: dict[str, Module] = {}
+        # Cache locked_at on first `.bundle` access. Re-deriving on every
+        # access invalidates any downstream hash keyed on the bundle.
+        self._locked_at: datetime | None = None
+
+    def _init_locked_at(self) -> datetime:
+        """Set + return `locked_at` on first access. Subsequent calls reuse
+        the cached timestamp so bundle hashes are stable across `.bundle`
+        accesses."""
+        if self._locked_at is None:
+            self._locked_at = datetime.now(timezone.utc)
+        return self._locked_at
 
     # ----------------------------------------------------------- builder API
     def add(self, item: Addable) -> Module | "Board":
@@ -287,6 +298,77 @@ class Board:
         raise TypeError(
             f"Board.add() takes SubsystemPick or Interface, "
             f"not {type(item).__name__}"
+        )
+
+    def resistor(
+        self,
+        refdes: str,
+        value: str,
+        *,
+        package: str = "0603",
+        price_usd: float = 0.01,
+        **extra: Any,
+    ) -> Module:
+        """Add a discrete resistor as a first-class Module.
+
+            >>> r1 = board.resistor("R1", "10k")
+            >>> r1.show()  # if board has eeschema integration
+
+        `refdes` becomes the subsystem `id` (lowercased) and the MPN is
+        synthesized as `R_<value>_<package>` (e.g. `R_10k_0603`) so the
+        BOM aggregator can group identical resistors.
+        """
+        return self.module(
+            id=refdes.lower(),
+            category="resistor",
+            mpn=f"R_{value}_{package}",
+            package=package,
+            price_usd=price_usd,
+            **extra,
+        )
+
+    def capacitor(
+        self,
+        refdes: str,
+        value: str,
+        *,
+        package: str = "0603",
+        price_usd: float = 0.02,
+        **extra: Any,
+    ) -> Module:
+        """Add a discrete capacitor as a first-class Module.
+
+            >>> c1 = board.capacitor("C1", "100nF")
+        """
+        return self.module(
+            id=refdes.lower(),
+            category="capacitor",
+            mpn=f"C_{value}_{package}",
+            package=package,
+            price_usd=price_usd,
+            **extra,
+        )
+
+    def inductor(
+        self,
+        refdes: str,
+        value: str,
+        *,
+        package: str = "0603",
+        price_usd: float = 0.05,
+        **extra: Any,
+    ) -> Module:
+        """Add a discrete inductor as a first-class Module.
+
+            >>> l1 = board.inductor("L1", "10uH", package="0805")
+        """
+        return self.module(
+            id=refdes.lower(),
+            category="inductor",
+            mpn=f"L_{value}_{package}",
+            package=package,
+            price_usd=price_usd,
+            **extra,
         )
 
     def module(self, **fields: Any) -> Module:
@@ -429,6 +511,49 @@ class Board:
         """
         return self.net(id, type="data", protocol=protocol)
 
+    def swd(self, id: str = "swd") -> tuple[Net, Net, Net]:
+        """ARM SWD debug bus. Returns `(swdio, swdclk, nreset)`."""
+        swdio  = self.net(f"{id}_swdio",  type="data", protocol="swd")
+        swdclk = self.net(f"{id}_swdclk", type="data", protocol="swd")
+        nreset = self.net(f"{id}_nreset", type="data", protocol="swd")
+        return swdio, swdclk, nreset
+
+    def can(self, id: str) -> tuple[Net, Net]:
+        """CAN bus pair. Returns `(canh, canl)`."""
+        canh = self.net(f"{id}_h", type="data", protocol="can")
+        canl = self.net(f"{id}_l", type="data", protocol="can")
+        return canh, canl
+
+    def stereo(self, id: str, protocol: str = "analog") -> tuple[Net, Net]:
+        """Stereo audio L/R pair. Returns `(left, right)`."""
+        left = self.net(f"{id}_l", type="data", protocol=protocol)
+        right = self.net(f"{id}_r", type="data", protocol=protocol)
+        return left, right
+
+    def diff_pair(
+        self,
+        id: str,
+        protocol: str = "analog",
+    ) -> tuple[Net, Net]:
+        """Differential / balanced signal pair. Returns `(pos, neg)`.
+
+        Naming convention only — `<id>_p` / `<id>_n`. Downstream layout
+        tools can detect the pair by id suffix and enforce matched-length
+        routing.
+        """
+        p = self.net(f"{id}_p", type="data", protocol=protocol)
+        n = self.net(f"{id}_n", type="data", protocol=protocol)
+        return p, n
+
+    def nc(self, id: str) -> Net:
+        """No-connect / dummy net. Pre-binds an `external.NC` sentinel
+        so the net survives the `EmptyNetError` ≥2-member rule even when
+        the engineer only attaches one real pin. Use for intentionally
+        unused pins (e.g. USB-C SBU1/2 when not routed)."""
+        n = self.net(id, type="signal", protocol="gpio")
+        n.members.append(("external", "NC"))
+        return n
+
     def net(
         self,
         id: str,
@@ -569,7 +694,9 @@ class Board:
                 assembly=self._assembly,  # type: ignore[arg-type]
                 vendor=self._vendor,  # type: ignore[arg-type]
                 research_baseline_git_tag=f"{self.project_id}/live",
-                locked_at=datetime.now(timezone.utc),
+                locked_at=(self._locked_at
+                           if self._locked_at is not None
+                           else self._init_locked_at()),
             )
         except Exception as e:
             errors = getattr(e, "errors", None)
