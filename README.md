@@ -83,12 +83,6 @@ hw_toolkit/
 └── exceptions.py typed exception hierarchy
 ```
 
-## Reference notebook
-
-`docs/projects/control_hub_v1/control_hub_v1.ipynb` — 14 cells, end-to-end
-flow from load → modules → nets → ERC → export. Renders cleanly with
-`jupyter nbconvert --execute`.
-
 ## Companion: MCP servers
 
 `mcp_server/` holds the research + KiCad-live-edit MCP servers used by
