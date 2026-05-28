@@ -65,7 +65,10 @@ class Interface(BaseModel):
     current_peak_max_a: float | None = Field(default=None, gt=0)
 
     # Signal/data-specific
-    protocol: Literal["i2c", "spi", "uart", "can", "usb", "swd"] | None = None
+    protocol: Literal[
+        "i2c", "spi", "uart", "can", "usb", "swd",
+        "i2s", "analog", "gpio", "pwm", "onewire",
+    ] | None = None
     speed_hz: int | None = Field(default=None, gt=0)
 
     notes: str = ""

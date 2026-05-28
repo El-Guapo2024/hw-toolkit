@@ -334,8 +334,99 @@ class Board:
         scl = self.net(f"{id}_scl", type="data", protocol="i2c")
         return sda, scl
 
-    def signal(self, id: str, protocol: str = "uart") -> Net:
-        """Sugar for `board.net(id, type="data", protocol=protocol)`."""
+    def spi(self, id: str) -> tuple[Net, Net, Net, Net]:
+        """Build a 4-wire SPI bus. Returns `(mosi, miso, sck, cs)`.
+
+            >>> mosi, miso, sck, cs = board.spi("flash")
+            >>> mosi += "mcu.MOSI", "flash.DI"
+            >>> # per-device CS — declare extra nets with board.signal(...)
+        """
+        mosi = self.net(f"{id}_mosi", type="data", protocol="spi")
+        miso = self.net(f"{id}_miso", type="data", protocol="spi")
+        sck  = self.net(f"{id}_sck",  type="data", protocol="spi")
+        cs   = self.net(f"{id}_cs",   type="data", protocol="spi")
+        return mosi, miso, sck, cs
+
+    def uart(self, id: str) -> tuple[Net, Net]:
+        """Build a UART pair. Returns `(tx, rx)`.
+
+            >>> tx, rx = board.uart("gps")
+            >>> tx += "mcu.UART1_TX", "gps.RX"
+            >>> rx += "mcu.UART1_RX", "gps.TX"
+        """
+        tx = self.net(f"{id}_tx", type="data", protocol="uart")
+        rx = self.net(f"{id}_rx", type="data", protocol="uart")
+        return tx, rx
+
+    def i2s(self, id: str) -> tuple[Net, Net, Net]:
+        """Build an I²S audio bus. Returns `(bclk, lrck, data)`.
+
+            >>> bclk, lrck, data = board.i2s("audio0")
+            >>> bclk += "mcu.BCLK", "dac.BCK"; ...
+        """
+        bclk = self.net(f"{id}_bclk", type="data", protocol="i2s")
+        lrck = self.net(f"{id}_lrck", type="data", protocol="i2s")
+        data = self.net(f"{id}_data", type="data", protocol="i2s")
+        return bclk, lrck, data
+
+    def usbc(self, id: str) -> dict[str, Net]:
+        """Build a USB-C connector bundle.
+
+        Returns a dict `{"vbus", "gnd", "cc1", "cc2", "dp", "dm",
+        "sbu1", "sbu2"}`. The engineer joins each net to the
+        connector + ESD + endpoint as needed.
+
+            >>> usb = board.usbc("conn0")
+            >>> usb["vbus"] += "usbc.VBUS", "esd.VBUS", "buck.VIN"
+            >>> usb["dp"]   += "usbc.DP",   "esd.DP",   "mcu.USB_DP"
+        """
+        return {
+            "vbus": self.power(f"{id}_vbus", voltage_v=5.0),
+            "gnd":  self.net(f"{id}_gnd",  type="power", voltage_v=0),
+            "cc1":  self.net(f"{id}_cc1",  type="data",  protocol="usb"),
+            "cc2":  self.net(f"{id}_cc2",  type="data",  protocol="usb"),
+            "dp":   self.net(f"{id}_dp",   type="data",  protocol="usb"),
+            "dm":   self.net(f"{id}_dm",   type="data",  protocol="usb"),
+            "sbu1": self.net(f"{id}_sbu1", type="data",  protocol="usb"),
+            "sbu2": self.net(f"{id}_sbu2", type="data",  protocol="usb"),
+        }
+
+    def dual_supply(
+        self,
+        id: str,
+        *,
+        vpos: float,
+        vneg: float,
+    ) -> tuple[Net, Net]:
+        """Bipolar analog supply pair (e.g. ±15V for opamps). Returns
+        `(pos_net, neg_net)`.
+
+        `vneg` is supplied as a positive magnitude (e.g. `vneg=15`
+        for −15V) because the underlying voltage_v field must be ≥ 0.
+        The net id encodes polarity: `<id>_pos` / `<id>_neg`.
+
+            >>> vp, vn = board.dual_supply("analog15", vpos=15, vneg=15)
+            >>> vp += "ldo_pos.VOUT", "opamp.VCC"
+            >>> vn += "ldo_neg.VOUT", "opamp.VEE"
+        """
+        if vpos < 0 or vneg < 0:
+            raise ValueError(
+                "dual_supply takes positive magnitudes only — polarity is "
+                "encoded in the net id (_pos / _neg)."
+            )
+        pos = self.power(f"{id}_pos", voltage_v=vpos)
+        neg = self.power(f"{id}_neg", voltage_v=vneg)
+        return pos, neg
+
+    def signal(self, id: str, protocol: str = "analog") -> Net:
+        """Sugar for `board.net(id, type="data", protocol=protocol)`.
+
+        Default protocol is ``"analog"`` — the most common use-case for
+        a bare signal net. Digital buses have dedicated factories
+        (``board.spi()``, ``board.i2s()``, etc.). Override with any
+        string from the supported enum: i2c, spi, uart, can, usb, swd,
+        i2s, analog, gpio, pwm, onewire.
+        """
         return self.net(id, type="data", protocol=protocol)
 
     def net(
