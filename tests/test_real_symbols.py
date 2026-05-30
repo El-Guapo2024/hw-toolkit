@@ -96,11 +96,25 @@ def test_resolver_passives_to_device_symbols() -> None:
     assert lib_id == "Device:L"
 
 
-def test_resolver_catalogued_ic() -> None:
+def test_resolver_ic_by_exact_symbol_name() -> None:
+    # The KiCad symbol name IS the MPN for most stock parts — exact index hit.
     from hw_toolkit.kicad.resolve import resolve_kicad_part
     lib_id, fp = resolve_kicad_part("TPS54302", "buck_converter", "SOT-23-6")
     assert lib_id == "Regulator_Switching:TPS54302"
     assert fp == "Package_TO_SOT_SMD:SOT-23-6"
+
+
+def test_resolver_normalizes_st_packing_suffix() -> None:
+    # Distributor MPN STM32F042K6T6 -> KiCad symbol STM32F042K6Tx.
+    from hw_toolkit.kicad.resolve import resolve_kicad_part
+    lib_id, _ = resolve_kicad_part("STM32F042K6T6", "mcu", "LQFP-32")
+    assert lib_id == "MCU_ST_STM32F0:STM32F042K6Tx"
+
+
+def test_resolver_alias() -> None:
+    from hw_toolkit.kicad.resolve import resolve_kicad_part
+    lib_id, _ = resolve_kicad_part("TCAN330GD", "interface", "SOIC-8")
+    assert lib_id == "Interface_CAN_LIN:TCAN330G"
 
 
 def test_resolver_unknown_ic_returns_none() -> None:
@@ -108,11 +122,14 @@ def test_resolver_unknown_ic_returns_none() -> None:
     assert resolve_kicad_part("WIDGET-9000", "mcu", "QFN-32") == (None, None)
 
 
-def test_resolver_rejects_bad_catalog_entry() -> None:
-    # _symbol_exists must validate the SYMBOL, not just the lib file.
-    from hw_toolkit.kicad.resolve import _symbol_exists
-    assert _symbol_exists("Device:R") is True
-    assert _symbol_exists("Regulator_Switching:TPS54331D") is False  # file ok, symbol absent
+def test_index_validates_symbol_not_just_file() -> None:
+    # find_symbol_lib_id must match the SYMBOL, not the library file:
+    # TPS54331D's file (Regulator_Switching) exists but the symbol doesn't.
+    from hw_toolkit.kicad import lib
+    assert lib.find_symbol_lib_id("TPS54302") == "Regulator_Switching:TPS54302"
+    assert lib.find_symbol_lib_id("TPS54331D") is None
+    assert lib.find_symbol_lib_id("Device:R") is None  # name only, not lib_id
+    assert lib._symbol_index()["R"] == "Device:R"
 
 
 def test_board_module_auto_resolves() -> None:
@@ -144,10 +161,19 @@ def test_all_real_board_needs_no_synthesis_suppressions() -> None:
     b.check_erc(expected_codes=hw.ERC_REAL_SYMBOL_CODES)
 
 
-def test_catalog_entries_all_resolve_to_real_symbols() -> None:
-    # Every catalogued lib_id must exist as a real symbol (not just a
-    # file) — guards against a copy-paste typo silently degrading to synth.
-    from hw_toolkit.kicad.resolve import _IC_CATALOG, _symbol_exists
-    bad = [f"{mpn} -> {lib}" for mpn, lib in _IC_CATALOG.items()
-           if not _symbol_exists(lib)]
-    assert not bad, f"catalog entries with missing symbols: {bad}"
+def test_symbol_index_covers_thousands_of_parts() -> None:
+    # The index scans the installed libs from cold (unlike kicad_sch_api's
+    # cache-only search), so it resolves any stock symbol with no catalog.
+    from hw_toolkit.kicad import lib
+    idx = lib._symbol_index()
+    assert len(idx) > 1000
+    assert idx["TPS54302"] == "Regulator_Switching:TPS54302"
+
+
+def test_aliases_resolve_to_installed_symbols() -> None:
+    # Every alias target must be a real installed symbol.
+    from hw_toolkit.kicad import lib
+    from hw_toolkit.kicad.resolve import _ALIASES
+    bad = [f"{k} -> {v}" for k, v in _ALIASES.items()
+           if lib.find_symbol_lib_id(v) is None]
+    assert not bad, f"aliases pointing at missing symbols: {bad}"

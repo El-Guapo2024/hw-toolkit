@@ -57,6 +57,48 @@ def register_extra_lib_path(path: Path) -> None:
         _extra_lib_paths.set(current + (p,))
 
 
+@lru_cache(maxsize=1)
+def _symbol_index() -> dict[str, str]:
+    """Map every installed symbol name → its `Library:Symbol` lib_id.
+
+    Scans the stock library dirs (KICAD_SYMBOL_DIR + DEFAULT_LIB_PATHS) once
+    per process. Project-local synthesized libs (registered via
+    `register_extra_lib_path`) are intentionally excluded — resolution
+    should match real stock symbols, not placeholders. Unit sub-symbols
+    (`NAME_0_1`) are filtered out; first lib wins on a name collision.
+    """
+    import re
+
+    sym_re = re.compile(r'\(symbol "([^"]+)"')
+    unit_re = re.compile(r"_\d+_\d+$")
+    index: dict[str, str] = {}
+    env = os.environ.get("KICAD_SYMBOL_DIR")
+    dirs = ([Path(env)] if env else []) + DEFAULT_LIB_PATHS
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for f in sorted(d.glob("*.kicad_sym")):
+            try:
+                text = f.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            for name in sym_re.findall(text):
+                if unit_re.search(name):
+                    continue
+                index.setdefault(name, f"{f.stem}:{name}")
+    return index
+
+
+def find_symbol_lib_id(name: str) -> Optional[str]:
+    """Return the `Library:Symbol` lib_id for an exact symbol-name match.
+
+    `name` is matched against the symbol name (which, for most KiCad stock
+    parts, IS the MPN — e.g. "AP2112K-3.3", "TPS54302", "SHT31-DIS").
+    Returns None if no installed library defines that symbol.
+    """
+    return _symbol_index().get(name)
+
+
 def _find_lib(lib_name: str) -> Path:
     """Locate a .kicad_sym file by library name (e.g. 'Regulator_Linear')."""
     env = os.environ.get("KICAD_SYMBOL_DIR")

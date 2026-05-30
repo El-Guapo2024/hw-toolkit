@@ -1,20 +1,25 @@
 """Resolve a part to a real KiCad symbol `lib_id` + footprint.
 
 The planner places a real library symbol when a SubsystemPick carries a
-`lib_id` (see Phase 1). This module decides that lib_id automatically
-from the part's category / mpn / package, so the common parts resolve to
-real symbols without the caller spelling out the lib_id. Anything we
-can't resolve returns `(None, None)` and the planner falls back to
-synthesizing a placeholder — the historical behavior.
+`lib_id` (see Phase 1). This module decides that lib_id automatically by
+**querying the installed KiCad libraries** — not a hardcoded catalog. For
+most stock parts the KiCad symbol name IS the MPN ("AP2112K-3.3",
+"TPS54302", "SHT31-DIS"), so an exact index lookup resolves thousands of
+parts with zero maintenance.
 
-Every IC lib_id is validated against the actual library file via
-`lib.load_symbol` before being returned: `find_kicad_lib`-style checks
-only prove the `.kicad_sym` FILE exists, not that the symbol lives inside
-it (e.g. "TPS54331D" resolves the Regulator_Switching file but is not a
-symbol in it). A catalog typo therefore degrades to synthesis, never to a
-broken placement.
+A thin normalization layer handles the common mismatch: distributor MPNs
+carry a packing/temperature suffix that KiCad collapses to "x" (e.g.
+"STM32F042K6T6" → symbol "STM32F042K6Tx"). `_ALIASES` covers the few
+remaining quirks where the distributor name and the symbol name diverge
+in a way normalization can't derive.
+
+Anything still unresolved returns `(None, None)` → the planner synthesizes
+a placeholder (historical behavior). Every match goes through the live
+index, so a stale mapping can't place a symbol that isn't installed.
 """
 from __future__ import annotations
+
+import re
 
 from hw_toolkit.kicad import lib as kicad_lib
 
@@ -38,32 +43,20 @@ _PASSIVE_FOOTPRINT: dict[tuple[str, str], str] = {
     ("inductor", "0603"):  "Inductor_SMD:L_0603_1608Metric",
     ("inductor", "0805"):  "Inductor_SMD:L_0805_2012Metric",
     ("inductor", "1206"):  "Inductor_SMD:L_1206_3216Metric",
+    ("inductor", "1210"):  "Inductor_SMD:L_1210_3225Metric",
 }
 
-# Curated MPN → KiCad symbol lib_id. Seed set; extend as parts recur.
-# Validated at resolve time, so an entry that doesn't actually exist in
-# the installed libs is silently ignored (falls back to synthesis).
-_IC_CATALOG: dict[str, str] = {
-    # Switching regulators
-    "TPS54302":       "Regulator_Switching:TPS54302",
-    "TPS54308":       "Regulator_Switching:TPS54308",
-    "AP63205WU":      "Regulator_Switching:AP63205WU",
-    # Linear regulators / LDOs
-    "AP2112K-3.3":    "Regulator_Linear:AP2112K-3.3",
-    "MIC5219-3.3YM5": "Regulator_Linear:MIC5219-3.3YM5",
-    # MCUs
-    "STM32F042K6Tx":  "MCU_ST_STM32F0:STM32F042K6Tx",
-    "STM32F042C6Tx":  "MCU_ST_STM32F0:STM32F042C6Tx",
-    "STM32L031K6Tx":  "MCU_ST_STM32L0:STM32L031K6Tx",
-    "STM32G431CBUx":  "MCU_ST_STM32G4:STM32G431CBUx",
-    # Interfaces / sensors
-    "TCAN330G":       "Interface_CAN_LIN:TCAN330G",
-    "SHT31-DIS":      "Sensor_Humidity:SHT31-DIS",
-    "AS5047D":        "Sensor_Magnetic:AS5047D",
+# Distributor MPN → KiCad symbol name, only for cases normalization can't
+# derive. Keep this SMALL — most parts resolve by exact name or the ST
+# suffix rule below. (Not a catalog: values are symbol names, validated
+# against the live index like everything else.)
+_ALIASES: dict[str, str] = {
+    "TCAN330GD": "TCAN330G",   # -D package code dropped in the symbol
+    "AS5047P":   "AS5047D",    # KiCad ships the D variant only
 }
 
-# IC package → KiCad footprint. Shared with the planner's older map; kept
-# here so the resolver is self-contained.
+# IC package → KiCad footprint. Best-effort; an unknown package just
+# yields no footprint (the real symbol still places + ERCs clean).
 _IC_FOOTPRINT: dict[str, str] = {
     "SOIC-8":   "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
     "SOIC-14":  "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm",
@@ -79,20 +72,22 @@ _IC_FOOTPRINT: dict[str, str] = {
     "QFN-16":   "Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm",
     "QFN-32":   "Package_DFN_QFN:QFN-32-1EP_5x5mm_P0.5mm_EP3.45x3.45mm",
     "LQFP-32":  "Package_QFP:LQFP-32_7x7mm_P0.8mm",
+    "LQFP-48":  "Package_QFP:LQFP-48_7x7mm_P0.5mm",
 }
 
+# ST packing/temperature suffix → "x": STM32F042K6T6 → STM32F042K6Tx.
+_ST_SUFFIX_RE = re.compile(r"([TUVHJ])\d$")
 
-def _symbol_exists(lib_id: str) -> bool:
-    """True iff `lib_id` resolves to a real symbol in an installed library.
 
-    Validates the SYMBOL, not just the library file — load_symbol raises
-    FileNotFoundError (no lib) or KeyError/ValueError (no such symbol).
-    """
-    try:
-        kicad_lib.load_symbol(lib_id)
-        return True
-    except Exception:
-        return False
+def _symbol_candidates(mpn: str):
+    """Yield symbol-name guesses for an MPN, most specific first."""
+    mpn = mpn.strip()
+    yield mpn
+    if mpn in _ALIASES:
+        yield _ALIASES[mpn]
+    normalized = _ST_SUFFIX_RE.sub(r"\1x", mpn)
+    if normalized != mpn:
+        yield normalized
 
 
 def resolve_kicad_part(
@@ -103,18 +98,18 @@ def resolve_kicad_part(
     """Return `(lib_id, footprint)` for a part, or `(None, None)`.
 
     Passives resolve by category to Device:R/C/L with an SMD footprint.
-    ICs resolve via the curated MPN catalog, validated against the
-    installed libraries. Unknown parts return `(None, None)` so the
-    planner synthesizes a placeholder.
+    ICs resolve by looking up the MPN (and a couple of normalized forms)
+    in the live installed-library index. Unknown parts return
+    `(None, None)` so the planner synthesizes a placeholder.
     """
     if category in _PASSIVE_LIB:
         lib_id = _PASSIVE_LIB[category]
-        # Device symbols are always installed; guard anyway.
-        if not _symbol_exists(lib_id):
+        if kicad_lib.find_symbol_lib_id(lib_id.split(":", 1)[1]) is None:
             return None, None
         return lib_id, _PASSIVE_FOOTPRINT.get((category, package))
 
-    lib_id = _IC_CATALOG.get(mpn)
-    if lib_id and _symbol_exists(lib_id):
-        return lib_id, _IC_FOOTPRINT.get(package)
+    for name in _symbol_candidates(mpn):
+        lib_id = kicad_lib.find_symbol_lib_id(name)
+        if lib_id:
+            return lib_id, _IC_FOOTPRINT.get(package)
     return None, None
