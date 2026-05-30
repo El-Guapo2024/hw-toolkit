@@ -142,3 +142,12 @@ def test_all_real_board_needs_no_synthesis_suppressions() -> None:
     assert "lib_symbol_issues" not in hw.ERC_REAL_SYMBOL_CODES
     assert "footprint_link_issues" not in hw.ERC_REAL_SYMBOL_CODES
     b.check_erc(expected_codes=hw.ERC_REAL_SYMBOL_CODES)
+
+
+def test_catalog_entries_all_resolve_to_real_symbols() -> None:
+    # Every catalogued lib_id must exist as a real symbol (not just a
+    # file) — guards against a copy-paste typo silently degrading to synth.
+    from hw_toolkit.kicad.resolve import _IC_CATALOG, _symbol_exists
+    bad = [f"{mpn} -> {lib}" for mpn, lib in _IC_CATALOG.items()
+           if not _symbol_exists(lib)]
+    assert not bad, f"catalog entries with missing symbols: {bad}"

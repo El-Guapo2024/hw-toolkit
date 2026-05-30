@@ -44,10 +44,22 @@ _PASSIVE_FOOTPRINT: dict[tuple[str, str], str] = {
 # Validated at resolve time, so an entry that doesn't actually exist in
 # the installed libs is silently ignored (falls back to synthesis).
 _IC_CATALOG: dict[str, str] = {
-    "TPS54302":      "Regulator_Switching:TPS54302",
-    "TPS54308":      "Regulator_Switching:TPS54308",
-    "STM32F042K6Tx": "MCU_ST_STM32F0:STM32F042K6Tx",
-    "STM32F042C6Tx": "MCU_ST_STM32F0:STM32F042C6Tx",
+    # Switching regulators
+    "TPS54302":       "Regulator_Switching:TPS54302",
+    "TPS54308":       "Regulator_Switching:TPS54308",
+    "AP63205WU":      "Regulator_Switching:AP63205WU",
+    # Linear regulators / LDOs
+    "AP2112K-3.3":    "Regulator_Linear:AP2112K-3.3",
+    "MIC5219-3.3YM5": "Regulator_Linear:MIC5219-3.3YM5",
+    # MCUs
+    "STM32F042K6Tx":  "MCU_ST_STM32F0:STM32F042K6Tx",
+    "STM32F042C6Tx":  "MCU_ST_STM32F0:STM32F042C6Tx",
+    "STM32L031K6Tx":  "MCU_ST_STM32L0:STM32L031K6Tx",
+    "STM32G431CBUx":  "MCU_ST_STM32G4:STM32G431CBUx",
+    # Interfaces / sensors
+    "TCAN330G":       "Interface_CAN_LIN:TCAN330G",
+    "SHT31-DIS":      "Sensor_Humidity:SHT31-DIS",
+    "AS5047D":        "Sensor_Magnetic:AS5047D",
 }
 
 # IC package → KiCad footprint. Shared with the planner's older map; kept

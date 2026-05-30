@@ -103,8 +103,43 @@ nc += "conn0.SBU1"
 
 # --- finalize ---
 board.check_erc()                       # raises MultipleERCViolations
-board.export_kicad("foo.zip", unzip=True)
+board.export_kicad("foo.zip", unzip=True)  # auto-runs ERC before zipping
 board.export_spice("foo.cir")           # optional
+```
+
+### Real KiCad symbols (use them — don't synthesize)
+
+`board.module(...)` auto-resolves a real KiCad library symbol + footprint
+when it can (`hw_toolkit/kicad/resolve.py`): passives → `Device:R/C/L`,
+catalogued ICs → their real `lib_id`. Real symbols emit NO
+`lib_symbol_issues` / `footprint_link_issues`, so a fully-real board gates
+on the tighter `hw.ERC_REAL_SYMBOL_CODES` instead of the full baseline.
+
+```python
+# Force a specific symbol (net port names must match its real pin names):
+mcu = board.module(id="u1", category="mcu", mpn="STM32F042K6Tx",
+                   package="LQFP-32", lib_id="MCU_ST_STM32F0:STM32F042K6Tx")
+```
+
+If a part isn't in any installed lib it synthesizes a placeholder (the old
+behavior) and you keep the full `hw.ERC_BASELINE_CODES`. Prefer adding a
+recurring IC to the resolver catalog over letting it synthesize. NOTE:
+checking that a `.kicad_sym` FILE exists does NOT prove the symbol is in
+it — the resolver validates via `lib.load_symbol`; you should too.
+
+### Full block factories
+
+`hw_toolkit.parts.Buck` builds a whole regulator (IC + Cin/Cout/L/Cboot +
+feedback divider, auto-wired) from component values — you don't place the
+passives yourself:
+
+```python
+from hw_toolkit.parts import Buck
+buck = Buck(board, id="buck_3v3", mpn="TPS54302", package="SOT-23-6",
+            vin=12.0, vout=3.3, l="10uH", cin="10uF", cout="22uF",
+            cboot="100nF", rtop="31.6k", rbot="10k")
+source.power_out.connect_to(buck.power_in)   # typed
+buck.power_out.connect_to(mcu.power_in)       # output is the inductor node
 ```
 
 ### What does NOT exist (do not call):
@@ -163,25 +198,33 @@ Read it with: `python -c "import nbformat; nb=nbformat.read('path', 4); print([c
 | `MultipleERCViolations` | KiCad ERC flagged synthesized-schematic noise | mostly NOT real bugs — see §6.1 expected_codes. |
 | `KiCadCliNotFound` | kicad-cli missing | macOS path is `/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli` — should auto-resolve |
 | `ValidationError` on `board.module(...)` | required field missing | `id, category, mpn, package` are required |
+| `UnknownSubsystemError: 'mcu'` | net member references a subsystem id that was never `.module()`'d (e.g. typo `"mcu.VDD"` vs id `"mcu0"`) | fix the id in the `+=` member; runs implicitly on any write/export/ERC |
 
 ### 6.1 — `expected_codes` is the escape valve (use it!)
 
-Most ERC failures on a synthesized hw_toolkit schematic are NOT real bugs.
-They are artifacts of the auto-generated symbol library. Start every
-project with this exact tuple:
+Most ERC failures on a hw_toolkit schematic are NOT real bugs — they're
+auto-layout / synthesized-symbol artifacts. Use the exported constants
+instead of hand-typing the tuple:
 
 ```python
-board.check_erc(expected_codes=(
-    "pin_not_connected",         # intentional NCs (USB-C SBU/data on charge-only, MCP73831 STAT, etc.)
-    "lib_symbol_issues",         # hwagent lib synthesized at runtime, not registered globally
-    "pin_to_pin",                # rails tied directly to pins (e.g. LDO EN to VBAT for always-on)
-    "power_pin_not_driven",      # connector power pins without PWR_FLAG
-    "unconnected_wire_endpoint", # synthesized wire-layout artifact
-))
+import hw_toolkit as hw
+
+board.check_erc(expected_codes=hw.ERC_BASELINE_CODES)      # any synthesized parts
+board.check_erc(expected_codes=hw.ERC_REAL_SYMBOL_CODES)   # all parts real symbols
 ```
 
-Only add MORE codes if a new violation appears AND you confirm it's a
-synthesis artifact, not a wiring bug. Do not remove codes from this baseline.
+- `hw.ERC_REAL_SYMBOL_CODES` — the 4 auto-layout topology artifacts every
+  board has (intentional NCs, rails tied straight to pins, PWR_FLAG-less
+  connector pins, synthesized wire fragments).
+- `hw.ERC_BASELINE_CODES` — the above **plus** `lib_symbol_issues` and
+  `footprint_link_issues`, which only a SYNTHESIZED placeholder emits. A
+  board whose parts all resolved to real symbols needs neither — gate on
+  `ERC_REAL_SYMBOL_CODES`.
+
+`board.export_kicad(...)` runs ERC itself with `ERC_BASELINE_CODES` by
+default (pass `erc=False` to skip, or `expected_codes=` to override), so a
+separate `check_erc()` cell is optional. Only add MORE codes if a new
+violation appears AND you confirm it's an artifact, not a wiring bug.
 
 ### 6.2 — Multi-device buses (CS lines)
 
