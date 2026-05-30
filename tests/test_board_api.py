@@ -40,6 +40,45 @@ def test_unknown_subsystem_raises_typed() -> None:
     assert exc.value.known == ("mcu",)
 
 
+# --------------------------------------------------------------- validate()
+def test_validate_passes_when_all_members_resolve() -> None:
+    board = hw.Board("t")
+    board.module(id="a", category="mcu_module", mpn="ESP32-S3")
+    board.module(id="b", category="mcu_module", mpn="ESP32-S3")
+    net = board.net("sig", type="data", protocol="i2c")
+    net += "a.SDA", "b.SDA"
+    board.validate()  # no raise
+
+
+def test_validate_raises_on_unknown_subsystem_member() -> None:
+    board = hw.Board("t")
+    board.module(id="mcu0", category="mcu_module", mpn="ESP32-S3")
+    rail = board.net("v3v3", type="power", voltage_v=3.3)
+    rail += "mcu0.VDD", "mcu.VDD"  # typo: "mcu" not a module id
+    with pytest.raises(hw.UnknownSubsystemError) as exc:
+        board.validate()
+    assert exc.value.subsystem_id == "mcu"
+    assert "mcu0" in exc.value.known
+
+
+def test_validate_allows_external_nc_sentinel() -> None:
+    board = hw.Board("t")
+    board.module(id="conn", category="connector", mpn="USB4125")
+    nc = board.nc("conn_sbu1_nc")
+    nc += "conn.SBU1"  # NC sentinel is the second member
+    board.validate()  # no raise
+
+
+def test_validate_runs_implicitly_on_bundle() -> None:
+    # the gate fires without an explicit validate() call
+    board = hw.Board("t")
+    board.module(id="mcu0", category="mcu_module", mpn="ESP32-S3")
+    rail = board.net("v3v3", type="power", voltage_v=3.3)
+    rail += "mcu0.VDD", "ghost.VDD"
+    with pytest.raises(hw.UnknownSubsystemError):
+        _ = board.bundle
+
+
 # --------------------------------------------------------------- net()
 def test_net_iadd_joins_string_endpoints() -> None:
     board = hw.Board("t")

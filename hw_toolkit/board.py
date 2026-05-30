@@ -53,6 +53,18 @@ Addable = Union[SubsystemPick, Interface]
 
 NetType = Literal["power", "signal", "data"]
 
+# ERC codes that are synthesis artifacts of the auto-generated symbol
+# library, not real wiring bugs. Used as the default suppression set when
+# `export_kicad(erc=True)` runs ERC. Mirrors AGENT_GUIDE.md §6.1.
+ERC_BASELINE_CODES: tuple[str, ...] = (
+    "pin_not_connected",          # intentional NCs (USB-C SBU, MCP73831 STAT, ...)
+    "lib_symbol_issues",          # hwagent lib synthesized at runtime
+    "pin_to_pin",                 # rails tied directly to pins
+    "power_pin_not_driven",       # connector power pins without PWR_FLAG
+    "unconnected_wire_endpoint",  # synthesized wire-layout artifact
+    "footprint_link_issues",      # synthesized footprint names not in KiCad stock lib
+)
+
 
 _BBOX_NUM = r"-?\d+(?:\.\d+)?"
 
@@ -643,27 +655,51 @@ class Board:
         data = self.net(f"{id}_data", type="data", protocol="i2s")
         return bclk, lrck, data
 
-    def usbc(self, id: str) -> dict[str, Net]:
+    def usbc(
+        self,
+        id: str,
+        *,
+        data: bool = True,
+        cc: bool = False,
+        sbu: bool = False,
+    ) -> dict[str, Net]:
         """Build a USB-C connector bundle.
 
-        Returns a dict `{"vbus", "gnd", "cc1", "cc2", "dp", "dm",
-        "sbu1", "sbu2"}`. The engineer joins each net to the
-        connector + ESD + endpoint as needed.
+        Only the lines you ask for are created — every net in the
+        returned dict must end up with ≥2 members or bundle-time
+        `EmptyNetError` fires. Creating CC/SBU nets you then leave
+        unwired is the most common cause of that error, so they are
+        opt-in:
 
-            >>> usb = board.usbc("conn0")
-            >>> usb["vbus"] += "usbc.VBUS", "esd.VBUS", "buck.VIN"
-            >>> usb["dp"]   += "usbc.DP",   "esd.DP",   "mcu.USB_DP"
+        - `vbus`, `gnd` — always present (power + return).
+        - `dp`, `dm` — present when `data=True` (default; a USB data
+          port). Pass `data=False` for a charge-only connector.
+        - `cc1`, `cc2` — present when `cc=True`. Enable when you model
+          USB-C detection/PD; remember the CC lines need their `Rd`
+          pulldowns (or a PD controller) wired in, or they trip
+          `EmptyNetError`.
+        - `sbu1`, `sbu2` — present when `sbu=True` (alt-mode / debug;
+          rarely routed). When left unrouted, prefer `board.nc(...)`.
+
+            >>> usb = board.usbc("conn0")            # vbus/gnd/dp/dm
+            >>> usb["vbus"] += "conn0.VBUS", "buck.VIN"
+            >>> usb["dp"]   += "conn0.DP",   "mcu.USB_DP"
+            >>> usb = board.usbc("conn0", cc=True)   # + cc1/cc2
         """
-        return {
+        nets: dict[str, Net] = {
             "vbus": self.power(f"{id}_vbus", voltage_v=5.0),
             "gnd":  self.net(f"{id}_gnd",  type="power", voltage_v=0),
-            "cc1":  self.net(f"{id}_cc1",  type="data",  protocol="usb"),
-            "cc2":  self.net(f"{id}_cc2",  type="data",  protocol="usb"),
-            "dp":   self.net(f"{id}_dp",   type="data",  protocol="usb"),
-            "dm":   self.net(f"{id}_dm",   type="data",  protocol="usb"),
-            "sbu1": self.net(f"{id}_sbu1", type="data",  protocol="usb"),
-            "sbu2": self.net(f"{id}_sbu2", type="data",  protocol="usb"),
         }
+        if data:
+            nets["dp"] = self.net(f"{id}_dp", type="data", protocol="usb")
+            nets["dm"] = self.net(f"{id}_dm", type="data", protocol="usb")
+        if cc:
+            nets["cc1"] = self.net(f"{id}_cc1", type="data", protocol="usb")
+            nets["cc2"] = self.net(f"{id}_cc2", type="data", protocol="usb")
+        if sbu:
+            nets["sbu1"] = self.net(f"{id}_sbu1", type="data", protocol="usb")
+            nets["sbu2"] = self.net(f"{id}_sbu2", type="data", protocol="usb")
+        return nets
 
     def dual_supply(
         self,
@@ -928,12 +964,38 @@ class Board:
         to the engineer's manual `.connect()` interfaces. Result is one
         flat interface list the planner consumes.
         """
+        self.validate()
         ifaces = list(self._interfaces)
         for n in self._nets:
             if len(n.members) < 2:
                 raise EmptyNetError(net_id=n.id, member_count=len(n.members))
             ifaces.extend(n.expand())
         return self._build_bundle(self._subsystems, ifaces)
+
+    def validate(self) -> None:
+        """Structural pre-flight: every net member must reference a real
+        module (or the ``external`` no-connect sentinel from ``board.nc``).
+
+        Runs implicitly on every ``.bundle`` access — i.e. on every
+        ``write_kicad`` / ``export_kicad`` / ``export_spice`` / ``check_erc``
+        — so a typo'd member like ``"mcu.VDD"`` against module id ``"mcu0"``
+        is caught the moment the board is materialized instead of being
+        silently dropped into the netlist. The ``+=`` operator only checks
+        the ``sub.port`` string shape; this resolves ``sub`` against the
+        actual modules. Also callable directly as a cheap pre-flight.
+
+        Raises ``UnknownSubsystemError`` on the first unresolved member.
+        """
+        known = set(self._modules)
+        for n in self._nets:
+            for sub, _port in n.members:
+                if sub == "external":  # board.nc() NC sentinel
+                    continue
+                if sub not in known:
+                    raise UnknownSubsystemError(
+                        subsystem_id=sub,
+                        known=tuple(sorted(known)),
+                    )
 
     def _sub_bundle_for(self, subsystem_id: str) -> ResearchBundle:
         """Bundle slice containing only one subsystem (no interfaces).
@@ -1035,19 +1097,34 @@ class Board:
         zip_path: str | Path,
         *,
         unzip: bool = False,
+        erc: bool = True,
+        expected_codes: tuple[str, ...] = ERC_BASELINE_CODES,
     ) -> Path:
         """Bundle the full KiCad project (sch + project + lib) into one
         zip at `zip_path`. This is the only artifact the engineer keeps —
         unzip + open in eeschema for phase 2 hand-tune.
 
+        By default (`erc=True`) ERC runs before zipping with the
+        `ERC_BASELINE_CODES` synthesis-artifact suppressions, so a board
+        can't ship a zip that never passed ERC. Raises
+        `MultipleERCViolations` on a real violation. Pass `erc=False` to
+        export without checking, or override `expected_codes` to widen /
+        narrow the suppression set.
+
         Writes the scratch files first if they're missing/stale. If
         `unzip=True`, also drops the unpacked files alongside the zip in
         `<zip_path stem>/` so they're readable without unzipping.
         """
-        # 1. Ensure the .kicad_sch exists + is current.
-        self.write_kicad(overwrite=True)
+        # 1. Gate: ERC before zip (also writes a current .kicad_sch via
+        #    check_erc's autowrite). Skipped only when erc=False.
+        if erc:
+            self.check_erc(expected_codes=expected_codes)
+        else:
+            # No ERC gate ran, so write the current .kicad_sch ourselves.
+            # (When erc=True, check_erc's autowrite already emitted it.)
+            self.write_kicad(overwrite=True)
 
-        # 2. Emit project files so eeschema/pcbnew open cleanly + kicad-cli
+        # 3. Emit project files so eeschema/pcbnew open cleanly + kicad-cli
         #    resolves the project-local symbol library on ERC.
         if not self.pro_path.exists():
             self.pro_path.write_text(_MINIMAL_KICAD_PRO, encoding="utf-8")
@@ -1059,7 +1136,7 @@ class Board:
         if not flt.exists():
             flt.write_text(_PROJECT_FP_LIB_TABLE, encoding="utf-8")
 
-        # 3. Zip only the final board files. Per-module scratch
+        # 4. Zip only the final board files. Per-module scratch
         #    (`_<id>.kicad_sch`, `_<id>.svg`) and ERC reports are excluded —
         #    the engineer only needs the deliverables.
         zip_path = Path(zip_path).expanduser().resolve()
@@ -1080,7 +1157,7 @@ class Board:
             for f in files:
                 zf.write(f, arcname=f.name)
 
-        # 4. Optional: mirror the files unpacked alongside the zip.
+        # 5. Optional: mirror the files unpacked alongside the zip.
         if unzip:
             import shutil
             unpacked = zip_path.with_suffix("")
@@ -1173,6 +1250,12 @@ class Board:
             )
         try:
             return self.bundle._repr_html_()
+        except UnknownSubsystemError as e:
+            return (
+                f"<h4>Board <code>{self.project_id}</code> "
+                "<span style='color:#c00'>(invalid)</span></h4>"
+                f"<ul><li>{html_escape(str(e))}</li></ul>"
+            )
         except BundleValidationError as e:
             errs = "".join(f"<li>{html_escape(err)}</li>" for err in e.errors)
             return (

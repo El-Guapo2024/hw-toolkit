@@ -45,15 +45,71 @@ def test_i2s_returns_three_nets() -> None:
 
 
 # --------------------------------------------------------------- usbc
-def test_usbc_returns_bundle_dict() -> None:
+def test_usbc_default_is_power_plus_data_only() -> None:
     b = _board()
     usb = b.usbc("conn0")
+    # cc/sbu are opt-in so a plain power+data port doesn't trip EmptyNetError
+    assert set(usb.keys()) == {"vbus", "gnd", "dp", "dm"}
+    assert usb["vbus"].voltage_v == 5.0
+    assert usb["gnd"].voltage_v == 0
+    assert all(usb[k].protocol == "usb" for k in ("dp", "dm"))
+
+
+def test_usbc_opt_in_cc_and_sbu() -> None:
+    b = _board()
+    usb = b.usbc("conn0", cc=True, sbu=True)
     assert set(usb.keys()) == {
         "vbus", "gnd", "cc1", "cc2", "dp", "dm", "sbu1", "sbu2",
     }
-    assert usb["vbus"].voltage_v == 5.0
-    assert usb["gnd"].voltage_v == 0
-    assert all(usb[k].protocol == "usb" for k in ("cc1", "cc2", "dp", "dm", "sbu1", "sbu2"))
+    assert all(usb[k].protocol == "usb" for k in ("cc1", "cc2", "sbu1", "sbu2"))
+
+
+def test_usbc_charge_only_drops_data() -> None:
+    b = _board()
+    usb = b.usbc("conn0", data=False)
+    assert set(usb.keys()) == {"vbus", "gnd"}
+
+
+def test_usbc_default_bundle_passes_erc() -> None:
+    # regression: default usbc() used to create empty cc/sbu nets that
+    # tripped EmptyNetError at bundle time for a plain power+data port.
+    b = _board()
+    conn = b.module(id="conn0", category="connector", mpn="USB4125", package="USB-C")
+    mcu = b.module(id="mcu", category="mcu", mpn="STM32F042", package="LQFP-32")
+    usb = b.usbc("conn0")
+    usb["vbus"] += "conn0.VBUS", "mcu.VBUS"
+    usb["gnd"] += "conn0.GND", "mcu.GND"
+    usb["dp"] += "conn0.DP", "mcu.USB_DP"
+    usb["dm"] += "conn0.DM", "mcu.USB_DM"
+    b.check_erc(expected_codes=hw.ERC_BASELINE_CODES)
+
+
+# --------------------------------------------------------------- export gate
+def _usb_power_board() -> "hw.Board":
+    b = _board()
+    conn = b.module(id="conn0", category="connector", mpn="USB4125", package="USB-C")
+    mcu = b.module(id="mcu", category="mcu", mpn="STM32F042", package="LQFP-32")
+    usb = b.usbc("conn0")
+    usb["vbus"] += "conn0.VBUS", "mcu.VBUS"
+    usb["gnd"] += "conn0.GND", "mcu.GND"
+    usb["dp"] += "conn0.DP", "mcu.USB_DP"
+    usb["dm"] += "conn0.DM", "mcu.USB_DM"
+    return b
+
+
+def test_export_kicad_runs_erc_by_default(tmp_path) -> None:
+    # default erc=True ships ERC with the baseline artifact suppressions —
+    # a clean board exports without the caller calling check_erc() first.
+    b = _usb_power_board()
+    out = b.export_kicad(tmp_path / "usb.zip")
+    assert out.exists()
+
+
+def test_export_kicad_erc_false_skips_check(tmp_path) -> None:
+    # erc=False still exports; just no ERC gate.
+    b = _usb_power_board()
+    out = b.export_kicad(tmp_path / "usb.zip", erc=False)
+    assert out.exists()
 
 
 # --------------------------------------------------------------- dual_supply

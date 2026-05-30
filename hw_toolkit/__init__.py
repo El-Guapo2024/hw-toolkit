@@ -34,7 +34,7 @@ import logging as _logging  # noqa: E402  (deliberate ordering)
 _logging.getLogger("kicad_sch_api").setLevel(_logging.ERROR)
 
 from hw_toolkit import calc, iface, parts  # noqa: E402
-from hw_toolkit.board import Board, Module, Net  # noqa: E402
+from hw_toolkit.board import ERC_BASELINE_CODES, Board, Module, Net  # noqa: E402
 from hw_toolkit.iface import (  # noqa: E402
     BusReferenceMismatch,
     Gnd,
@@ -74,6 +74,7 @@ __all__ = [
     "Board",
     "Module",
     "Net",
+    "ERC_BASELINE_CODES",
     "calc",
     "iface",
     "parts",
