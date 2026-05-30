@@ -1,12 +1,29 @@
-"""Buck — synchronous step-down converter factory with typed power IO.
+"""Buck — synchronous step-down converter as a full, auto-wired block.
 
-Defaults to the TPS54331-style pinout (`VIN`, `VOUT`, `GND`, `EN`, `SW`,
-`BOOT`, `FB`). Override `pinout` to map a different chip's pin names.
+Unlike a bare IC factory, `Buck` builds the whole regulator: the
+controller IC plus its input cap, output cap, inductor, bootstrap cap,
+and feedback divider — and wires the switch node, bootstrap, feedback,
+and the VIN/VOUT/GND rails. The caller passes the component values; the
+factory turns each into a real `Device:C/L/R` part (via the resolver) and
+connects them.
 
-The factory exposes `power_in` + `power_out` as typed `Power` bundles
-so consumers connect rails type-safely. Remaining pins (EN, SW, BOOT,
-FB) are attached as raw `Pin` attributes — engineers wire them with
-the existing `net += "<id>.PIN"` API or future typed `Logic` bundles.
+Topology (switching buck — the output is the INDUCTOR node, not an IC
+pin; the IC exposes SW + FB):
+
+    VIN ─┬─ Cin ─ GND          SW ─┬─ L ─┬─ VOUT ─┬─ Cout ─ GND
+         IC.VIN                IC.SW   │         ├─ Rtop ─┐
+    EN ──┘ (tied on)                   └─ Cboot ─ BOOT    FB ── IC.FB
+                                                          └─ Rbot ─ GND
+
+The returned Module is the IC, with typed `power_in` (at IC.VIN) and
+`power_out` (at the inductor output node) `Power` bundles exposed, so
+consumers connect rails type-safely:
+
+    >>> buck = Buck(board, id="buck_3v3", mpn="TPS54302", package="SOT-23-6",
+    ...             vin=12.0, vout=3.3, l="10uH", cin="10uF", cout="22uF",
+    ...             cboot="100nF", rtop="31.6k", rbot="10k")
+    >>> source.power_out.connect_to(buck.power_in)
+    >>> buck.power_out.connect_to(mcu.power_in)
 """
 from __future__ import annotations
 
@@ -15,12 +32,13 @@ from typing import TYPE_CHECKING
 from hw_toolkit.iface import Power
 
 if TYPE_CHECKING:
-    from hw_toolkit.board import Board, Module
+    from hw_toolkit.board import Board, Module, Net
 
 
+# Logical role → IC pin name. Override `pinout` for a chip with different
+# names. A switching buck has no VOUT pin — output is the inductor node.
 _DEFAULT_PINOUT = {
     "vin":  "VIN",
-    "vout": "VOUT",
     "gnd":  "GND",
     "en":   "EN",
     "sw":   "SW",
@@ -37,46 +55,73 @@ def Buck(
     package: str,
     vin: float,
     vout: float,
-    price_usd: float = 0.0,
+    l: str,
+    cin: str,
+    cout: str,
+    cboot: str,
+    rtop: str,
+    rbot: str,
+    lib_id: str | None = None,
     manufacturer: str = "",
+    price_usd: float = 0.0,
+    cap_package: str = "0805",
+    res_package: str = "0603",
+    ind_package: str = "1210",
+    gnd: "Net | None" = None,
+    tie_enable: bool = True,
     pinout: dict[str, str] | None = None,
 ) -> "Module":
-    """Add a buck converter to the board with typed `power_in`/`power_out`.
+    """Build a complete buck regulator and return the controller Module.
 
-        >>> buck = Buck(board, id="buck_3v3", mpn="TPS54331DR",
-        ...             package="SOIC-8", vin=12.0, vout=3.3,
-        ...             price_usd=1.85, manufacturer="Texas Instruments")
-        >>> buck.power_in
-        Power(hv=Pin(buck_3v3.VIN), lv=Pin(buck_3v3.GND), 12.0V)
-        >>> buck.power_out
-        Power(hv=Pin(buck_3v3.VOUT), lv=Pin(buck_3v3.GND), 3.3V)
-        >>> buck.en, buck.sw, buck.boot, buck.fb   # raw Pins for now
+    `l`, `cin`, `cout`, `cboot`, `rtop`, `rbot` are component values (e.g.
+    "10uH", "22uF", "31.6k") — each becomes a real Device:C/L/R part. The
+    feedback divider (`rtop`/`rbot`) sets VOUT; the caller sizes it. Pass a
+    `gnd` net to join the board's existing ground (otherwise the shared
+    "gnd" net is reused or created). `tie_enable=True` ties EN to VIN for
+    an always-on converter; set False to wire EN yourself via `buck.en`.
     """
     p = {**_DEFAULT_PINOUT, **(pinout or {})}
-    mod = board.module(
-        id=id,
-        category="buck_converter",
-        mpn=mpn,
-        package=package,
-        price_usd=price_usd,
-        manufacturer=manufacturer,
+    VIN, GND, EN, SW, BOOT, FB = (
+        p["vin"], p["gnd"], p["en"], p["sw"], p["boot"], p["fb"],
     )
-    mod.expose(
-        power_in=Power(
-            hv=mod.pin(p["vin"]),
-            lv=mod.pin(p["gnd"]),
-            voltage=vin,
-        ),
-        power_out=Power(
-            hv=mod.pin(p["vout"]),
-            lv=mod.pin(p["gnd"]),
-            voltage=vout,
-        ),
+
+    ic = board.module(
+        id=id, category="buck_converter", mpn=mpn, package=package,
+        lib_id=lib_id, manufacturer=manufacturer, price_usd=price_usd,
     )
-    # Raw Pin attrs for the secondary nets — wire with legacy `+=` API
-    # until a typed Logic bundle lands.
-    mod.en   = mod.pin(p["en"])
-    mod.sw   = mod.pin(p["sw"])
-    mod.boot = mod.pin(p["boot"])
-    mod.fb   = mod.pin(p["fb"])
-    return mod
+
+    # Support components — each auto-resolves to a real Device:C/L/R symbol.
+    cin_m = board.capacitor(f"{id}_cin", cin, package=cap_package)
+    cout_m = board.capacitor(f"{id}_cout", cout, package=cap_package)
+    cboot_m = board.capacitor(f"{id}_cboot", cboot, package="0402")
+    l_m = board.inductor(f"{id}_l", l, package=ind_package)
+    rtop_m = board.resistor(f"{id}_rtop", rtop, package=res_package)
+    rbot_m = board.resistor(f"{id}_rbot", rbot, package=res_package)
+
+    # Rails + internal nodes.
+    gnd_net = gnd if gnd is not None else (board.nets.get("gnd") or board.gnd())
+    vin_net = board.power(f"{id}_vin", voltage_v=vin)
+    vout_net = board.power(f"{id}_vout", voltage_v=vout)
+    sw = board.signal(f"{id}_sw", protocol="analog")
+    boot = board.signal(f"{id}_boot", protocol="analog")
+    fb = board.signal(f"{id}_fb", protocol="analog")
+
+    # Wiring (Device:C/L/R pins are numeric: "1"/"2").
+    vin_net += f"{ic.id}.{VIN}", f"{cin_m.id}.1"
+    gnd_net += (
+        f"{ic.id}.{GND}", f"{cin_m.id}.2", f"{cout_m.id}.2", f"{rbot_m.id}.2",
+    )
+    sw += f"{ic.id}.{SW}", f"{l_m.id}.1", f"{cboot_m.id}.2"
+    boot += f"{ic.id}.{BOOT}", f"{cboot_m.id}.1"
+    vout_net += f"{l_m.id}.2", f"{cout_m.id}.1", f"{rtop_m.id}.1"
+    fb += f"{ic.id}.{FB}", f"{rtop_m.id}.2", f"{rbot_m.id}.1"
+    if tie_enable:
+        vin_net += f"{ic.id}.{EN}"
+
+    # Typed IO: input at the IC, output at the inductor node.
+    ic.expose(
+        power_in=Power(hv=ic.pin(VIN), lv=ic.pin(GND), voltage=vin),
+        power_out=Power(hv=l_m.pin("2"), lv=ic.pin(GND), voltage=vout),
+    )
+    ic.en = ic.pin(EN)  # raw Pin for manual EN control when tie_enable=False
+    return ic

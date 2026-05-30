@@ -101,41 +101,68 @@ def test_i2c_add_pulls_without_reference_raises_when_no_power_passed():
 # ------------------------------------------------ Buck typed factory
 
 
-def test_buck_factory_creates_module_with_typed_power_iface():
+def _full_buck(b, **kw):
+    defaults = dict(
+        id="buck_3v3", mpn="TPS54302", package="SOT-23-6",
+        vin=12.0, vout=3.3, l="10uH", cin="10uF", cout="22uF",
+        cboot="100nF", rtop="31.6k", rbot="10k",
+    )
+    defaults.update(kw)
+    return Buck(b, **defaults)
+
+
+def test_buck_factory_builds_full_block_with_typed_power_iface():
     b = _board()
-    buck = Buck(b, id="buck_3v3", mpn="TPS54331DR", package="SOIC-8",
-                vin=12.0, vout=3.3, price_usd=1.85,
-                manufacturer="Texas Instruments")
+    buck = _full_buck(b, price_usd=1.85, manufacturer="Texas Instruments")
     assert isinstance(buck, hw.Module)
-    assert isinstance(buck.power_in, Power)
-    assert isinstance(buck.power_out, Power)
-    assert buck.power_in.voltage == 12.0
-    assert buck.power_out.voltage == 3.3
+    assert isinstance(buck.power_in, Power) and isinstance(buck.power_out, Power)
+    assert buck.power_in.voltage == 12.0 and buck.power_out.voltage == 3.3
+    # Input is the IC pin; output is the INDUCTOR node, not an IC pin.
     assert buck.power_in.hv == hw.Pin("buck_3v3", "VIN")
-    assert buck.power_out.hv == hw.Pin("buck_3v3", "VOUT")
-    # Raw secondary pins
-    assert buck.en == hw.Pin("buck_3v3", "EN")
-    assert buck.sw == hw.Pin("buck_3v3", "SW")
+    assert buck.power_out.hv == hw.Pin("buck_3v3_l", "2")
+    # All support components got created.
+    for suffix in ("cin", "cout", "cboot", "l", "rtop", "rbot"):
+        assert f"buck_3v3_{suffix}" in b.parts
+    # IC resolved to a real symbol; passives too.
+    assert buck.lib_id == "Regulator_Switching:TPS54302"
+    assert b.parts["buck_3v3_l"].lib_id == "Device:L"
 
 
-def test_buck_to_mcu_power_connect_via_typed_iface():
+def test_buck_to_mcu_power_connect_merges_output_rail():
     b = _board()
-    buck = Buck(b, id="buck_3v3", mpn="TPS54331DR", package="SOIC-8",
-                vin=12.0, vout=3.3)
+    buck = _full_buck(b)
     mcu = b.module(id="mcu", category="mcu", mpn="XX1", package="LQFP-32")
     mcu.expose(vdd=Power(hv=mcu.pin("VDD"), lv=mcu.pin("VSS"), voltage=3.3))
     buck.power_out.connect_to(mcu.vdd)
-    # Two nets: hv pair (VOUT ↔ VDD) and lv pair (GND ↔ VSS)
-    assert len(b._nets) == 2
+    # MCU VDD joins the existing vout rail (inductor node); VSS joins gnd.
+    vout_members = {m for m in b.nets["buck_3v3_vout"].members}
+    assert ("mcu", "VDD") in vout_members
+    assert ("mcu", "VSS") in b.nets["gnd"].members
+
+
+def test_buck_full_block_passes_tight_erc():
+    b = _board()
+    _full_buck(b)
+    # All parts real → no synthesis suppressions needed.
+    b.check_erc(expected_codes=hw.ERC_REAL_SYMBOL_CODES)
+
+
+def test_buck_tie_enable_false_leaves_en_floating_pin():
+    b = _board()
+    buck = _full_buck(b, tie_enable=False)
+    assert buck.en == hw.Pin("buck_3v3", "EN")
+    assert ("buck_3v3", "EN") not in b.nets["buck_3v3_vin"].members
 
 
 def test_buck_pinout_override():
     """Custom chip with non-default pin names: pass `pinout=`."""
     b = _board()
-    buck = Buck(b, id="lmr16030", mpn="LMR16030SDDAR", package="SO-PowerPAD-8",
-                vin=24.0, vout=5.0,
-                pinout={"vin": "PVIN", "vout": "OUT", "gnd": "PGND",
-                        "en": "EN", "sw": "SW", "boot": "BOOT", "fb": "FB"})
+    buck = _full_buck(
+        b, id="lmr16030", mpn="LMR16030SDDAR", package="SO-PowerPAD-8",
+        vin=24.0, vout=5.0,
+        pinout={"vin": "PVIN", "gnd": "PGND", "en": "EN",
+                "sw": "SW", "boot": "BOOT", "fb": "FB"},
+    )
     assert buck.power_in.hv == hw.Pin("lmr16030", "PVIN")
-    assert buck.power_out.hv == hw.Pin("lmr16030", "OUT")
     assert buck.power_in.lv == hw.Pin("lmr16030", "PGND")
+    assert buck.power_out.hv == hw.Pin("lmr16030_l", "2")
