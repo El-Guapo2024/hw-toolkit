@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 
 import hw_toolkit as hw
-from hw_toolkit.iface import Gnd, I2C, Iface, IfaceTypeMismatch, Pin, PinNotFound, Power, SPI, UART
+from hw_toolkit.iface import Gnd, I2C, Iface, IfaceTypeMismatch, Pin, PinNotFound, Power, SPI, UART, USB2
 
 
 # ---------------------------------------------------------------------- Pin
@@ -207,3 +207,28 @@ def test_gnd_single_pin_iface():
     chip_a.gnd.connect_to(chip_b.gnd)
     assert len(b._nets) == 1
     assert b._nets[0].voltage_v == 0.0
+
+
+def test_usb2_four_wire_bundle_makes_four_signal_nets():
+    b = _basic_board()
+    mcu = b.module(id="mcu", category="mcu", mpn="XX1", package="SOIC-8")
+    conn = b.module(id="usbc", category="connector", mpn="XX1", package="SOIC-8")
+    mcu.expose(usb=USB2(vbus=mcu.pin("VBUS"), dp=mcu.pin("DP"),
+                        dm=mcu.pin("DM"), gnd=mcu.pin("GND")))
+    conn.expose(usb=USB2(vbus=conn.pin("VBUS"), dp=conn.pin("D+"),
+                         dm=conn.pin("D-"), gnd=conn.pin("GND")))
+    mcu.usb.connect_to(conn.usb)
+    assert len(b._nets) == 4
+    assert all(n.type == "signal" for n in b._nets)
+    assert all(n.protocol == "usb" for n in b._nets)
+
+
+def test_usb2_type_mismatch_raises():
+    b = _basic_board()
+    mcu = b.module(id="mcu", category="mcu", mpn="XX1", package="SOIC-8")
+    conn = b.module(id="usbc", category="connector", mpn="XX1", package="SOIC-8")
+    mcu.expose(usb=USB2(vbus=mcu.pin("VBUS"), dp=mcu.pin("DP"),
+                        dm=mcu.pin("DM"), gnd=mcu.pin("GND")))
+    conn.expose(uart=UART(tx=conn.pin("TX"), rx=conn.pin("RX")))
+    with pytest.raises(IfaceTypeMismatch):
+        mcu.usb.connect_to(conn.uart)  # type: ignore[arg-type]

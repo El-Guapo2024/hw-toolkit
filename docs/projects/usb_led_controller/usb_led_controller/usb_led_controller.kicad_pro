@@ -1,0 +1,16 @@
+{
+  "board": {"design_settings": {}},
+  "boards": [],
+  "cvpcb": {"equivalence_files": []},
+  "erc": {"erc_exclusions": [], "meta": {"version": 0}, "pin_map": [], "rule_severities": {}},
+  "libraries": {
+    "pinned_footprint_libs": [],
+    "pinned_symbol_libs": ["hwagent"]
+  },
+  "meta": {"filename": "project.kicad_pro", "version": 1},
+  "net_settings": {},
+  "pcbnew": {},
+  "schematic": {"legacy_lib_dir": "", "legacy_lib_list": []},
+  "sheets": [["00000000-0000-0000-0000-000000000000", "Root"]],
+  "text_variables": {}
+}
