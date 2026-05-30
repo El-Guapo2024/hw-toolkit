@@ -47,3 +47,5 @@ docs/projects/test_*/
 
 # Claude worktrees (scratch)
 .claude/worktrees/
+
+.tmp/

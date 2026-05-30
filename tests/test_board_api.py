@@ -70,6 +70,29 @@ def test_duplicate_net_id_raises_typed() -> None:
         board.net("nn", type="signal", protocol="i2c")
 
 
+def test_net_signal_without_protocol_raises_at_call_site() -> None:
+    """Fails fast with a helpful message — not deep in bundle validation."""
+    board = hw.Board("t")
+    with pytest.raises(ValueError) as exc:
+        board.net("foo", type="signal")
+    msg = str(exc.value)
+    assert "protocol" in msg
+    assert "board.signal" in msg
+
+
+def test_net_data_without_protocol_raises_at_call_site() -> None:
+    board = hw.Board("t")
+    with pytest.raises(ValueError) as exc:
+        board.net("foo", type="data")
+    assert "protocol" in str(exc.value)
+
+
+def test_net_power_without_protocol_still_allowed() -> None:
+    board = hw.Board("t")
+    n = board.net("v3v3", type="power", voltage_v=3.3)
+    assert n.protocol is None
+
+
 def test_empty_net_raises_typed_on_bundle() -> None:
     board = hw.Board("t")
     board.module(id="a", category="mcu_module", mpn="ESP32-S3")

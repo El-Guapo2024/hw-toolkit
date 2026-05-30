@@ -54,6 +54,154 @@ Addable = Union[SubsystemPick, Interface]
 NetType = Literal["power", "signal", "data"]
 
 
+_BBOX_NUM = r"-?\d+(?:\.\d+)?"
+
+
+def _svg_content_bbox(svg: str) -> tuple[float, float, float, float] | None:
+    """Scan a KiCad-emitted SVG for the bounding box of all drawn content.
+
+    KiCad writes the whole A4 page (297×210 mm) into `viewBox` even when
+    the circuit only fills a small corner. We sweep numeric coordinates
+    out of `<rect>`, `<line>`, `<polyline>`, `<polygon>`, `<text>`,
+    `<circle>`, and `<path>` elements and take the min/max so the wrapped
+    SVG actually crops to the schematic. Returns `(min_x, min_y, w, h)`
+    in viewBox units (mm) or None if nothing parseable was found.
+    """
+    import re
+
+    xs: list[float] = []
+    ys: list[float] = []
+
+    # <rect x="" y="" width="" height="">
+    for m in re.finditer(
+        rf'<rect\b[^>]*?\sx="({_BBOX_NUM})"[^>]*?\sy="({_BBOX_NUM})"'
+        rf'[^>]*?\swidth="({_BBOX_NUM})"[^>]*?\sheight="({_BBOX_NUM})"',
+        svg,
+    ):
+        x, y, w, h = map(float, m.groups())
+        xs.extend([x, x + w])
+        ys.extend([y, y + h])
+
+    # <line x1="" y1="" x2="" y2="">
+    for m in re.finditer(
+        rf'<line\b[^>]*?\sx1="({_BBOX_NUM})"[^>]*?\sy1="({_BBOX_NUM})"'
+        rf'[^>]*?\sx2="({_BBOX_NUM})"[^>]*?\sy2="({_BBOX_NUM})"',
+        svg,
+    ):
+        x1, y1, x2, y2 = map(float, m.groups())
+        xs.extend([x1, x2])
+        ys.extend([y1, y2])
+
+    # <circle cx="" cy="" r="">
+    for m in re.finditer(
+        rf'<circle\b[^>]*?\scx="({_BBOX_NUM})"[^>]*?\scy="({_BBOX_NUM})"'
+        rf'[^>]*?\sr="({_BBOX_NUM})"',
+        svg,
+    ):
+        cx, cy, r = map(float, m.groups())
+        xs.extend([cx - r, cx + r])
+        ys.extend([cy - r, cy + r])
+
+    # <text x="" y="">
+    for m in re.finditer(
+        rf'<text\b[^>]*?\sx="({_BBOX_NUM})"[^>]*?\sy="({_BBOX_NUM})"', svg
+    ):
+        xs.append(float(m.group(1)))
+        ys.append(float(m.group(2)))
+
+    # <polyline points="x,y x,y ...">  / <polygon points="...">
+    for m in re.finditer(r'<(?:polyline|polygon)\b[^>]*?\spoints="([^"]+)"', svg):
+        pts = re.findall(rf"({_BBOX_NUM})[ ,]+({_BBOX_NUM})", m.group(1))
+        for x, y in pts:
+            xs.append(float(x))
+            ys.append(float(y))
+
+    # <path d="M x y L x y ...">  — sweep all numeric pairs (cheap, ignores
+    # arc/control-point geometry but gets us close enough for crop).
+    for m in re.finditer(r'<path\b[^>]*?\sd="([^"]+)"', svg):
+        pts = re.findall(rf"({_BBOX_NUM})[ ,]+({_BBOX_NUM})", m.group(1))
+        for x, y in pts:
+            xs.append(float(x))
+            ys.append(float(y))
+
+    if not xs or not ys:
+        return None
+    pad = 2.0  # mm of breathing room around content
+    min_x = min(xs) - pad
+    min_y = min(ys) - pad
+    max_x = max(xs) + pad
+    max_y = max(ys) + pad
+    return (min_x, min_y, max_x - min_x, max_y - min_y)
+
+
+def _responsive_svg(
+    svg_bytes: bytes,
+    *,
+    max_width_px: int = 700,
+    max_height_px: int = 400,
+) -> Any:
+    """Wrap a raw SVG byte-string in an HTML container that scales to fit
+    a typical notebook cell, with a white background (so dark Jupyter
+    themes don't render the schematic invisible) and a content-cropped
+    viewBox (KiCad's A4 page is mostly empty whitespace).
+
+    Sizing strategy:
+      1. Crop viewBox to actual drawn content (KiCad emits full A4).
+      2. Compute the rendered size from the bbox aspect ratio, capped by
+         BOTH `max_width_px` and `max_height_px` — whichever hits first
+         wins. Without the height cap, a square ~40 mm subsystem would
+         render as a 700-px-tall square that fills the screen.
+      3. Apply the computed width/height directly to the SVG (in px) so
+         browser uses fixed pixel dimensions instead of width:100%.
+    """
+    import re
+    from IPython.display import HTML
+
+    svg = svg_bytes.decode("utf-8", errors="replace")
+    svg = re.sub(r"<\?xml[^?]*\?>\s*", "", svg, count=1)
+    svg = re.sub(r"<!DOCTYPE[^>]*>\s*", "", svg, count=1)
+
+    # Crop viewBox to actual content if we can derive a bbox.
+    bbox = _svg_content_bbox(svg)
+    if bbox is not None:
+        min_x, min_y, w, h = bbox
+        new_vb = f"{min_x:.4f} {min_y:.4f} {w:.4f} {h:.4f}"
+        svg = re.sub(
+            r'viewBox="[^"]*"', f'viewBox="{new_vb}"', svg, count=1
+        )
+        aspect = w / h if h > 0 else 1.0
+    else:
+        aspect = 1.0
+
+    # Pick display size capped by BOTH width and height.
+    width_px = max_width_px
+    height_px = width_px / aspect
+    if height_px > max_height_px:
+        height_px = max_height_px
+        width_px = height_px * aspect
+
+    # Strip hardcoded width/height on the root <svg>, then set ours.
+    svg = re.sub(
+        r'(<svg\b[^>]*?)\swidth="[^"]*"', r"\1", svg, count=1, flags=re.DOTALL
+    )
+    svg = re.sub(
+        r'(<svg\b[^>]*?)\sheight="[^"]*"', r"\1", svg, count=1, flags=re.DOTALL
+    )
+    svg = re.sub(
+        r"<svg\b",
+        f'<svg width="{width_px:.0f}px" height="{height_px:.0f}px" '
+        f'preserveAspectRatio="xMidYMid meet"',
+        svg,
+        count=1,
+    )
+
+    wrapper = (
+        f'<div style="display:inline-block;background:#ffffff;'
+        f'padding:8px;border-radius:4px;box-sizing:border-box;">{svg}</div>'
+    )
+    return HTML(wrapper)
+
+
 @dataclass
 class Net:
     """A logical net — a bucket of pins all on the same electrical node.
@@ -212,6 +360,47 @@ class Module:
             raise CheckFailed(subsystem_id=self.pick.id, label=msg)
         return self
 
+    # ----------------------------------------------------- typed Iface surface
+    def pin(self, name: str) -> "Pin":
+        """Sugar for `Pin(owner_id=self.id, name=name)`.
+
+            >>> mcu.pin("PA4")
+            Pin(mcu.PA4)
+        """
+        from hw_toolkit.iface import Pin
+        return Pin(owner_id=self.id, name=name)
+
+    def expose(self, **ifaces: Any) -> "Module":
+        """Attach typed `Iface` bundles as attributes on this Module.
+
+            >>> from hw_toolkit.iface import Power, I2C
+            >>> buck.expose(
+            ...     power_in=Power(hv=buck.pin("VIN"), lv=buck.pin("GND"), voltage=12),
+            ...     power_out=Power(hv=buck.pin("VOUT"), lv=buck.pin("GND"), voltage=3.3),
+            ... )
+            >>> mcu.expose(
+            ...     vdd=Power(hv=mcu.pin("VDD"), lv=mcu.pin("VSS"), voltage=3.3),
+            ...     i2c0=I2C(scl=mcu.pin("SCL"), sda=mcu.pin("SDA"), frequency=400_000),
+            ... )
+            >>> buck.power_out.connect_to(mcu.vdd)  # type-checked at the call site
+        """
+        from hw_toolkit.iface import Iface
+        for name, iface in ifaces.items():
+            if not isinstance(iface, Iface):
+                raise TypeError(
+                    f"expose: {name!r} must be an Iface subclass, got "
+                    f"{type(iface).__name__}"
+                )
+            if hasattr(self, name):
+                raise AttributeError(
+                    f"Module {self.id!r} already has attr {name!r}"
+                )
+            # Iface uses __slots__-free dataclass — set the back-pointer
+            # directly so connect_to() can reach the board.
+            iface._owner_module = self
+            setattr(self, name, iface)
+        return self
+
     @property
     def svg(self) -> bytes:
         """Render this subsystem in isolation, return raw SVG bytes."""
@@ -220,10 +409,13 @@ class Module:
         write_populated(sub_bundle, tmp_sch, overwrite=True)
         return render_sch_svg(tmp_sch).read_bytes()
 
-    def show(self) -> Any:
-        """Display this subsystem inline in jupyter."""
-        from IPython.display import SVG
-        return SVG(data=self.svg)
+    def show(
+        self, *, max_width_px: int = 600, max_height_px: int = 400
+    ) -> Any:
+        """Display this subsystem inline in jupyter, scaled to fit cell."""
+        return _responsive_svg(
+            self.svg, max_width_px=max_width_px, max_height_px=max_height_px
+        )
 
     def _repr_html_(self) -> str:
         rows = "".join(f"<li>{html_escape(n)}</li>" for n in self.notes)
@@ -569,6 +761,14 @@ class Board:
         """
         if any(existing.id == id for existing in self._nets):
             raise DuplicateNetError(net_id=id)
+        if type in ("signal", "data") and protocol is None:
+            raise ValueError(
+                f"net {id!r}: type={type!r} requires a protocol "
+                f"(one of: i2c, spi, uart, can, usb, swd, i2s, analog, "
+                f"gpio, pwm, onewire). Use board.signal(id, protocol=...) "
+                f"or a typed helper like board.spi(id), board.i2c(id), "
+                f"board.uart(id) instead."
+            )
         n = Net(id=id, type=type, voltage_v=voltage_v, protocol=protocol)
         self._nets.append(n)
         return n
@@ -609,6 +809,74 @@ class Board:
             )
         )
         return self
+
+    def connect_iface(self, a: Any, b: Any) -> list[Net]:
+        """Wire two typed `Iface` bundles pin-by-pin.
+
+        Validates type equality, then for each named pin in declaration order
+        either appends to an existing Net that already holds one side, or
+        creates a new Net carrying both sides. Returns the list of Nets
+        touched in declaration order (one per pin pair).
+
+        Engineers normally call `iface_a.connect_to(iface_b)` — that
+        delegates here once both sides are attached via `Module.expose()`.
+        """
+        from hw_toolkit.iface import Gnd, I2C, Power, SPI, UART, USB2
+        type_map = {
+            Power: ("power", None),
+            Gnd:   ("power", None),
+            I2C:   ("data",  "i2c"),
+            SPI:   ("data",  "spi"),
+            UART:  ("data",  "uart"),
+            USB2:  ("signal", "usb"),
+        }
+        net_type, protocol = type_map.get(type(a), ("signal", None))
+        voltage_v: float | None = None
+        if isinstance(a, Power):
+            voltage_v = a.voltage
+        elif isinstance(a, Gnd):
+            voltage_v = 0.0
+
+        touched: list[Net] = []
+        for pin_a, pin_b in a.pin_pairs(b):
+            m_a, m_b = pin_a.member(), pin_b.member()
+            existing = self._find_net_with_member(m_a) or \
+                self._find_net_with_member(m_b)
+            if existing is not None:
+                for m in (m_a, m_b):
+                    if m not in existing.members:
+                        existing.members.append(m)
+                touched.append(existing)
+                continue
+            net_id = self._uniquify_net_id(
+                f"{m_a[0]}_{m_a[1]}".lower()
+            )
+            n = self.net(
+                net_id,
+                type=net_type,  # type: ignore[arg-type]
+                voltage_v=voltage_v,
+                protocol=protocol,
+            )
+            n.members.append(m_a)
+            n.members.append(m_b)
+            touched.append(n)
+        return touched
+
+    def _find_net_with_member(self, member: tuple[str, str]) -> Net | None:
+        for n in self._nets:
+            if member in n.members:
+                return n
+        return None
+
+    def _uniquify_net_id(self, base: str) -> str:
+        """Append `_2`, `_3`, … if `base` already names an existing net."""
+        existing = {n.id for n in self._nets}
+        if base not in existing:
+            return base
+        i = 2
+        while f"{base}_{i}" in existing:
+            i += 1
+        return f"{base}_{i}"
 
     def __getitem__(self, subsystem_id: str) -> Module:
         """`board["buck_3v3"]` → `Module`. Convenience for late access."""
@@ -750,10 +1018,16 @@ class Board:
         path = render_sch_svg(self.sch_path)
         return path.read_bytes()
 
-    def show(self) -> Any:
-        """Display the full board schematic inline in jupyter."""
-        from IPython.display import SVG
-        return SVG(data=self.svg)
+    def show(
+        self, *, max_width_px: int = 900, max_height_px: int = 500
+    ) -> Any:
+        """Display the full board schematic inline in jupyter, scaled to
+        fit cell. Full board defaults to a slightly larger cap than
+        Module.show() since the full schematic has more to show.
+        """
+        return _responsive_svg(
+            self.svg, max_width_px=max_width_px, max_height_px=max_height_px
+        )
 
     # ----------------------------------------------------- final artifact
     def export_kicad(
