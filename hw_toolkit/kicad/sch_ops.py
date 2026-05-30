@@ -115,17 +115,42 @@ def _resolve_endpoint(sch, ep_str: str) -> tuple[float, float]:
 
 # ─── Add: components ───────────────────────────────────────────────────────
 
+def _register_system_lib(sch, lib_id: str) -> None:
+    """Make `kicad_sch_api` aware of a system/3rd-party symbol library.
+
+    kicad_sch_api only resolves a handful of bundled libraries out of the
+    box (Device, Connector_Generic, ...). For anything else
+    (Regulator_Switching, MCU_ST_STM32F0, ...) we resolve the `.kicad_sym`
+    file via hw_toolkit's own lib finder and register it. No-op if the
+    library file can't be located — `components.add` then raises its own
+    clear LibraryError.
+    """
+    from hw_toolkit.kicad import lib as kicad_lib
+
+    lib_name = lib_id.split(":", 1)[0]
+    try:
+        lib_path = kicad_lib._find_lib(lib_name)
+    except FileNotFoundError:
+        return
+    sch.library.add_library_path(str(lib_path))
+
+
 def add_ic(path: Path, ref: str, lib_id: str, at: tuple[float, float],
-           *, footprint: Optional[str] = None,
+           *, value: Optional[str] = None, footprint: Optional[str] = None,
            rotation: float = 0.0) -> dict:
     """Place a KiCad-library IC."""
     sch = _load(path)
-    comp = sch.components.add(
+    _register_system_lib(sch, lib_id)
+    kwargs = dict(
         lib_id=lib_id, reference=ref, position=at,
         footprint=footprint, rotation=rotation,
     )
+    if value is not None:
+        kwargs["value"] = value
+    comp = sch.components.add(**kwargs)
     _save(sch, path)
-    return {"id": ref, "lib_id": lib_id, "at": list(at), "uuid": comp.uuid}
+    return {"id": ref, "lib_id": lib_id, "value": value,
+            "at": list(at), "uuid": comp.uuid}
 
 
 def add_custom_ic(

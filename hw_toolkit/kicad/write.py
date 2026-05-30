@@ -14,6 +14,7 @@ from hw_toolkit.kicad.planner import (
     AddCustomIC,
     AddGround,
     AddPower,
+    AddSymbol,
     AddWire,
     SchematicPlan,
     plan_schematic,
@@ -62,6 +63,16 @@ def apply_plan(plan: SchematicPlan) -> Path:
                 at=(op.at_x, op.at_y),
                 pins=list(op.pins),
                 size=(op.width, op.height),
+                footprint=op.footprint,
+                rotation=op.rotation,
+            )
+        elif isinstance(op, AddSymbol):
+            sch_ops.add_ic(
+                path=path,
+                ref=op.ref,
+                lib_id=op.lib_id,
+                at=(op.at_x, op.at_y),
+                value=op.value,
                 footprint=op.footprint,
                 rotation=op.rotation,
             )

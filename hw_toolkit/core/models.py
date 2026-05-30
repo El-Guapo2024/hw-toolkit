@@ -31,6 +31,15 @@ class SubsystemPick(BaseModel):
     package: str = ""
     datasheet_url: str = ""
 
+    # KiCad symbol resolution. When `lib_id` is set (e.g.
+    # "Regulator_Switching:TPS54331D"), the planner places the real library
+    # symbol instead of synthesizing a placeholder into hwagent.kicad_sym;
+    # net port names must then match that symbol's pin names. `footprint`
+    # overrides the package→footprint guess. Both None → synthesize (the
+    # historical behavior).
+    lib_id: str | None = None
+    footprint: str | None = None
+
     # BOM + stock
     qty_per_board: int = Field(default=1, ge=1)
     price_usd: float = Field(default=0.0, ge=0)

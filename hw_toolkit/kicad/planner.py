@@ -68,6 +68,25 @@ class AddCustomIC:
 
 
 @dataclass(frozen=True)
+class AddSymbol:
+    """Place a real KiCad-library symbol by `lib_id` (no pin synthesis).
+
+    Used when the SubsystemPick resolved to an actual library part — pins
+    come from the library symbol itself, so wires reference `<ref>.<pin
+    name>` and are resolved against the placed symbol at write time.
+    """
+    kicad_sch: str
+    ref: str
+    lib_id: str
+    value: str
+    at_x: float
+    at_y: float
+    footprint: str | None = None
+    rotation: float = 0
+    tool: Literal["mcp__designer-mcp__add_ic"] = "mcp__designer-mcp__add_ic"
+
+
+@dataclass(frozen=True)
 class AddPower:
     kicad_sch: str
     ref: str
@@ -94,7 +113,7 @@ class AddWire:
     tool: Literal["mcp__designer-mcp__add_wire"] = "mcp__designer-mcp__add_wire"
 
 
-SchematicOp = AddCustomIC | AddPower | AddGround | AddWire
+SchematicOp = AddCustomIC | AddSymbol | AddPower | AddGround | AddWire
 
 
 @dataclass(frozen=True)
@@ -357,10 +376,26 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
         cy = _snap_grid(_LANE_Y_MM)
         positions[sub.id] = (cx, cy)
         ref = refmap[sub.id]
+        if sub.lib_id:
+            # Real KiCad library part — place the actual symbol. Pins come
+            # from the library, so we synthesize none; wires resolve against
+            # the placed symbol at write time.
+            ops.append(
+                AddSymbol(
+                    kicad_sch=sch,
+                    ref=ref,
+                    lib_id=sub.lib_id,
+                    value=sub.mpn,
+                    at_x=cx,
+                    at_y=cy,
+                    footprint=sub.footprint or _kicad_footprint_for(sub.package) or None,
+                )
+            )
+            continue
         # Merge auto-derived ports w/ any legacy port_bindings on the pick.
         ports = list(sub.port_bindings.keys()) + ports_by_sub.get(sub.id, [])
         pins = _synthesize_pins(sub, (cx, cy), ports=ports)
-        normalized_fp = _kicad_footprint_for(sub.package)
+        normalized_fp = sub.footprint or _kicad_footprint_for(sub.package)
         ops.append(
             AddCustomIC(
                 kicad_sch=sch,
