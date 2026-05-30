@@ -123,3 +123,22 @@ def test_board_module_auto_resolves() -> None:
     assert u.lib_id == "Regulator_Switching:TPS54302"
     ghost = b.module(id="u2", category="mcu", mpn="WIDGET-9000", package="QFN-32")
     assert ghost.lib_id is None
+
+
+# ----------------------------------------------------------- ERC win
+def test_all_real_board_needs_no_synthesis_suppressions() -> None:
+    # A board whose parts all resolved to real symbols emits neither
+    # lib_symbol_issues nor footprint_link_issues, so the tighter
+    # ERC_REAL_SYMBOL_CODES gate suffices.
+    b = hw.Board("t_allreal")
+    b.module(id="u1", category="buck_converter", mpn="TPS54302", package="SOT-23-6")
+    b.capacitor("C1", "10uF", package="0805")
+    b.capacitor("C2", "22uF", package="0805")
+    vin = b.power("vin", 12.0); vin += "u1.VIN", "c1.1"
+    gnd = b.gnd(); gnd += "u1.GND", "c1.2", "c2.2"
+    en = b.signal("en_t", protocol="gpio"); en += "u1.EN", "u1.VIN"
+    boot = b.signal("bt", protocol="gpio"); boot += "u1.BOOT", "u1.SW"
+    fb = b.signal("fbn", protocol="gpio"); fb += "u1.FB", "c2.1"
+    assert "lib_symbol_issues" not in hw.ERC_REAL_SYMBOL_CODES
+    assert "footprint_link_issues" not in hw.ERC_REAL_SYMBOL_CODES
+    b.check_erc(expected_codes=hw.ERC_REAL_SYMBOL_CODES)

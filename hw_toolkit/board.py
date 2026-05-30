@@ -57,12 +57,23 @@ NetType = Literal["power", "signal", "data"]
 # ERC codes that are synthesis artifacts of the auto-generated symbol
 # library, not real wiring bugs. Used as the default suppression set when
 # `export_kicad(erc=True)` runs ERC. Mirrors AGENT_GUIDE.md §6.1.
-ERC_BASELINE_CODES: tuple[str, ...] = (
+# Topology artifacts of hw_toolkit's auto-layout that aren't real wiring
+# bugs (intentional NCs, rails tied straight to pins, PWR_FLAG-less
+# connector pins, synthesized wire fragments). Needed by every
+# hw_toolkit board regardless of how its symbols were sourced.
+ERC_REAL_SYMBOL_CODES: tuple[str, ...] = (
     "pin_not_connected",          # intentional NCs (USB-C SBU, MCP73831 STAT, ...)
-    "lib_symbol_issues",          # hwagent lib synthesized at runtime
     "pin_to_pin",                 # rails tied directly to pins
     "power_pin_not_driven",       # connector power pins without PWR_FLAG
     "unconnected_wire_endpoint",  # synthesized wire-layout artifact
+)
+
+# Full suppression set, incl. the two codes that only a SYNTHESIZED symbol
+# emits (placeholder lib + placeholder footprint). A board whose parts all
+# resolved to real KiCad symbols (see hw_toolkit.kicad.resolve) emits
+# neither and can gate on the tighter ERC_REAL_SYMBOL_CODES instead.
+ERC_BASELINE_CODES: tuple[str, ...] = ERC_REAL_SYMBOL_CODES + (
+    "lib_symbol_issues",          # hwagent lib synthesized at runtime
     "footprint_link_issues",      # synthesized footprint names not in KiCad stock lib
 )
 
