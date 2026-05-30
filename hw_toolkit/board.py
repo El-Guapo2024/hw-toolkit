@@ -45,6 +45,7 @@ from hw_toolkit.exceptions import (
     UnknownSubsystemError,
 )
 from hw_toolkit.kicad import erc_json, mark_scratch, render_sch_svg, write_populated
+from hw_toolkit.kicad.resolve import resolve_kicad_part
 from hw_toolkit.spice import emit_spice_netlist
 
 DEFAULT_PROJECTS_ROOT = Path("docs/projects")
@@ -341,6 +342,16 @@ class Module:
     def manufacturer(self) -> str:
         return self.pick.manufacturer
 
+    @property
+    def lib_id(self) -> str | None:
+        """Resolved KiCad symbol lib_id, or None if synthesized."""
+        return self.pick.lib_id
+
+    @property
+    def footprint(self) -> str | None:
+        """Resolved KiCad footprint, or None."""
+        return self.pick.footprint
+
     # -------------------------------------------------- late-mutation setters
     # Matplotlib-style chainable setters. Each returns self.
     def set_value(self, value: str) -> "Module":
@@ -587,6 +598,20 @@ class Board:
             >>> buck.check(buck.math.thermal(rdson_mohm=80, theta_ja=40))
             >>> buck.show()
         """
+        # Auto-resolve a real KiCad symbol when the caller didn't pin one.
+        # Resolved parts place the actual library symbol; unresolved parts
+        # synthesize a placeholder (historical behavior). Caller-supplied
+        # lib_id always wins.
+        if not fields.get("lib_id"):
+            lib_id, footprint = resolve_kicad_part(
+                mpn=fields.get("mpn", ""),
+                category=fields.get("category", ""),
+                package=fields.get("package", ""),
+            )
+            if lib_id:
+                fields["lib_id"] = lib_id
+                if footprint and not fields.get("footprint"):
+                    fields["footprint"] = footprint
         pick = SubsystemPick(**fields)
         result = self.add(pick)
         # add() returns Module for SubsystemPick — cast for the type checker.

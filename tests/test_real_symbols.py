@@ -13,28 +13,33 @@ from hw_toolkit.kicad.planner import AddCustomIC, AddSymbol, plan_schematic
 
 
 # ----------------------------------------------------------- planner branch
-def _bundle_with(lib_id: str | None):
+def _bundle_with(mpn: str, lib_id: str | None):
+    # An mpn not in the resolver catalog + lib_id=None exercises the
+    # synthesis fallback; an explicit lib_id or a catalogued mpn does not.
     b = hw.Board("t")
-    b.module(id="u1", category="buck_converter", mpn="TPS54302",
+    b.module(id="u1", category="custom_ic", mpn=mpn,
              package="SOT-23-6", lib_id=lib_id)
-    b.module(id="u2", category="mcu", mpn="STM32F042K6Tx", package="LQFP-32")
+    b.module(id="u2", category="mcu", mpn="WIDGET-MCU-1", package="LQFP-32")
     n = b.signal("link", protocol="gpio")
     n += "u1.VIN", "u2.PA0"
     return b.bundle
 
 
-def test_lib_id_emits_add_symbol_op() -> None:
-    plan = plan_schematic(_bundle_with("Regulator_Switching:TPS54302"), "/tmp/x.kicad_sch")
+def test_explicit_lib_id_emits_add_symbol_op() -> None:
+    plan = plan_schematic(
+        _bundle_with("WIDGET-9000", "Regulator_Switching:TPS54302"),
+        "/tmp/x.kicad_sch",
+    )
     u1_ops = [o for o in plan.ops
               if isinstance(o, (AddSymbol, AddCustomIC)) and o.ref == "U1"]
     assert len(u1_ops) == 1
     assert isinstance(u1_ops[0], AddSymbol)
     assert u1_ops[0].lib_id == "Regulator_Switching:TPS54302"
-    assert u1_ops[0].value == "TPS54302"
+    assert u1_ops[0].value == "WIDGET-9000"
 
 
-def test_no_lib_id_still_synthesizes() -> None:
-    plan = plan_schematic(_bundle_with(None), "/tmp/x.kicad_sch")
+def test_uncatalogued_part_still_synthesizes() -> None:
+    plan = plan_schematic(_bundle_with("WIDGET-9000", None), "/tmp/x.kicad_sch")
     u1_ops = [o for o in plan.ops
               if isinstance(o, (AddSymbol, AddCustomIC)) and o.ref == "U1"]
     assert len(u1_ops) == 1
@@ -78,3 +83,43 @@ def test_real_symbol_board_passes_erc() -> None:
     boot = b.signal("boot_n", protocol="gpio"); boot += "u1.BOOT", "u1.SW"
     fb = b.signal("fb_n", protocol="gpio"); fb += "u1.FB", "c1.1"
     b.check_erc(expected_codes=hw.ERC_BASELINE_CODES)
+
+
+# ----------------------------------------------------------- resolver
+def test_resolver_passives_to_device_symbols() -> None:
+    from hw_toolkit.kicad.resolve import resolve_kicad_part
+    assert resolve_kicad_part("R_10k_0603", "resistor", "0603") == (
+        "Device:R", "Resistor_SMD:R_0603_1608Metric")
+    assert resolve_kicad_part("C_1uF_0805", "capacitor", "0805") == (
+        "Device:C", "Capacitor_SMD:C_0805_2012Metric")
+    lib_id, _ = resolve_kicad_part("L_10uH_0805", "inductor", "0805")
+    assert lib_id == "Device:L"
+
+
+def test_resolver_catalogued_ic() -> None:
+    from hw_toolkit.kicad.resolve import resolve_kicad_part
+    lib_id, fp = resolve_kicad_part("TPS54302", "buck_converter", "SOT-23-6")
+    assert lib_id == "Regulator_Switching:TPS54302"
+    assert fp == "Package_TO_SOT_SMD:SOT-23-6"
+
+
+def test_resolver_unknown_ic_returns_none() -> None:
+    from hw_toolkit.kicad.resolve import resolve_kicad_part
+    assert resolve_kicad_part("WIDGET-9000", "mcu", "QFN-32") == (None, None)
+
+
+def test_resolver_rejects_bad_catalog_entry() -> None:
+    # _symbol_exists must validate the SYMBOL, not just the lib file.
+    from hw_toolkit.kicad.resolve import _symbol_exists
+    assert _symbol_exists("Device:R") is True
+    assert _symbol_exists("Regulator_Switching:TPS54331D") is False  # file ok, symbol absent
+
+
+def test_board_module_auto_resolves() -> None:
+    b = hw.Board("t")
+    r = b.resistor("R1", "10k")
+    assert r.lib_id == "Device:R"
+    u = b.module(id="u1", category="buck_converter", mpn="TPS54302", package="SOT-23-6")
+    assert u.lib_id == "Regulator_Switching:TPS54302"
+    ghost = b.module(id="u2", category="mcu", mpn="WIDGET-9000", package="QFN-32")
+    assert ghost.lib_id is None
