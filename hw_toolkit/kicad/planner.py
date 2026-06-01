@@ -373,19 +373,66 @@ def _symbol_extent(sub: SubsystemPick) -> tuple[float, float]:
     return (_IC_BODY_W_MM, _IC_BODY_H_MM)
 
 
+_PASSIVE_CATEGORIES = {"resistor", "capacitor", "inductor"}
+
+
+def _effective_groups(bundle: ResearchBundle) -> dict[str, str]:
+    """Per-subsystem placement group, augmenting explicit `group` tags.
+
+    An ungrouped passive (R/C/L) is attached to the group of the
+    subsystem it shares the most connections with — so a decoupling cap
+    or pull-up clusters next to the part it serves instead of drifting
+    off on its own. Explicit groups (e.g. a Buck factory block) always win.
+    """
+    from collections import Counter, defaultdict
+
+    by_id = {s.id: s for s in bundle.subsystems}
+    group_of = {s.id: (s.group or s.id) for s in bundle.subsystems}
+
+    neighbors: dict[str, Counter] = defaultdict(Counter)
+    for itf in bundle.interfaces:
+        a, b = itf.from_subsystem, itf.to_subsystem
+        if a in by_id and b in by_id and a != b:
+            neighbors[a][b] += 1
+            neighbors[b][a] += 1
+
+    for s in bundle.subsystems:
+        if s.group or s.category not in _PASSIVE_CATEGORIES:
+            continue
+        counts = neighbors.get(s.id)
+        if not counts:
+            continue
+        # Most-connected neighbor, preferring a non-passive (the IC it serves).
+        best = max(
+            counts,
+            key=lambda nid: (counts[nid],
+                             by_id[nid].category not in _PASSIVE_CATEGORIES),
+        )
+        group_of[s.id] = group_of.get(best, best)
+    return group_of
+
+
 def _place_subsystems(
-    subs: "list[SubsystemPick]",
+    bundle: ResearchBundle,
 ) -> dict[str, tuple[float, float]]:
     """Cluster-aware placement → `{subsystem_id: (x, y)}`.
 
-    Parts sharing a `group` are packed into a tight mini-grid block (so a
-    factory block's internal wires stay short); ungrouped parts are their
-    own block. Blocks are laid left-to-right and wrap past `_PAGE_W_MM`.
+    Parts sharing an effective group are packed into a tight mini-grid
+    block (factory blocks plus auto-attached passives), so their internal
+    wires stay short. Within a block the anchor (the non-passive the
+    cluster is built around) is placed first. Blocks are laid
+    left-to-right and wrap past `_PAGE_W_MM`.
     """
-    # Group, preserving first-seen order.
+    subs = bundle.subsystems
+    group_of = _effective_groups(bundle)
+
+    # Group, preserving first-seen order; anchor (non-passive) first in each.
     groups: dict[str, list[SubsystemPick]] = {}
     for s in subs:
-        groups.setdefault(s.group or s.id, []).append(s)
+        groups.setdefault(group_of[s.id], []).append(s)
+    for key, members in groups.items():
+        members.sort(key=lambda m: (m.category in _PASSIVE_CATEGORIES,
+                                    m.id != key))
 
     sizes = {s.id: _symbol_extent(s) for s in subs}
     positions: dict[str, tuple[float, float]] = {}
@@ -442,7 +489,7 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
     # 1. Place subsystems. Parts sharing a `group` (e.g. a buck IC + its
     #    passives) are packed into one tight cluster; clusters are then
     #    arranged on a wrapped grid. Keeps a block's internal wires short.
-    positions = _place_subsystems(bundle.subsystems)
+    positions = _place_subsystems(bundle)
     for sub in bundle.subsystems:
         cx, cy = positions[sub.id]
         ref = refmap[sub.id]
