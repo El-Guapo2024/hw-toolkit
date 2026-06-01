@@ -1127,6 +1127,43 @@ class Board:
             self.svg, max_width_px=max_width_px, max_height_px=max_height_px
         )
 
+    # --------------------------------------------------------------- PCB
+    @property
+    def pcb_path(self) -> Path:
+        return self.kicad_dir / f"{self.project_id}.kicad_pcb"
+
+    def write_pcb(self) -> "PcbResult":
+        """Synthesize a placed `.kicad_pcb` (footprints + nets + ratsnest)
+        from the current schematic. Writes the .kicad_sch first.
+
+        Returns the `PcbResult` — `.placed` refs and `.skipped` (parts with
+        no resolvable footprint, e.g. unmapped connectors). PCB copper is
+        NOT routed here; open in pcbnew or run the autorouter for traces.
+        """
+        from hw_toolkit.kicad.pcb import write_pcb as _write_pcb
+
+        self.write_kicad(overwrite=True)
+        return _write_pcb(self.sch_path, self.pcb_path)
+
+    @property
+    def pcb_svg(self) -> bytes:
+        """Render the placed board (pads + silk + courtyard + ratsnest) to
+        SVG bytes. Pure property — scratch only."""
+        from hw_toolkit.kicad.pcb import render_pcb_svg
+
+        self.write_pcb()
+        return render_pcb_svg(self.pcb_path).read_bytes()
+
+    def show_pcb(
+        self, *, max_width_px: int = 900, max_height_px: int = 600
+    ) -> Any:
+        """Display the placed board (with ratsnest airwires) inline in
+        jupyter. Routing isn't done — airwires show what still needs copper.
+        """
+        return _responsive_svg(
+            self.pcb_svg, max_width_px=max_width_px, max_height_px=max_height_px
+        )
+
     # ----------------------------------------------------- final artifact
     def export_kicad(
         self,

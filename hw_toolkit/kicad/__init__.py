@@ -19,6 +19,7 @@ from hw_toolkit.kicad.cli import (
     find_cli,
     render_sch_svg,
 )
+from hw_toolkit.kicad.pcb import PcbError, PcbResult, render_pcb_svg, write_pcb
 from hw_toolkit.kicad.write import apply_plan, mark_scratch, write_populated
 
 __all__ = [
@@ -26,10 +27,14 @@ __all__ = [
     "KiCadCliRunError",
     "KiCadCliTimeoutError",
     "NoSvgProducedError",
+    "PcbError",
+    "PcbResult",
     "apply_plan",
     "erc_json",
     "find_cli",
     "mark_scratch",
+    "render_pcb_svg",
     "render_sch_svg",
+    "write_pcb",
     "write_populated",
 ]
