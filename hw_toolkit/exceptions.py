@@ -151,6 +151,23 @@ class RoutingFailedError(HwToolkitError):
 
 
 @dataclass
+class LayoutError(HwToolkitError):
+    """Schematic auto-layout (ELK) could not run or failed.
+
+    ELK is a hard dependency of the schematic generator — there is no
+    heuristic fallback. Raised when Node/elkjs is missing, the bridge
+    crashes, or the laid-out graph is unusable. `reason` carries the
+    machine-readable cause; `detail` the raw bridge stderr (truncated).
+    """
+    reason: str
+    detail: str = ""
+
+    def __str__(self) -> str:
+        tail = f": {self.detail}" if self.detail else ""
+        return f"LayoutError({self.reason}){tail}"
+
+
+@dataclass
 class DRCViolation(HwToolkitError):
     type: str
     severity: str

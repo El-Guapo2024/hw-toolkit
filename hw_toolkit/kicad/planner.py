@@ -20,35 +20,28 @@ For the MVP we only emit pin↔pin wires and pin↔power-anchor wires.
 """
 from __future__ import annotations
 
+import shutil
+import tempfile
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Literal
 
+from hw_toolkit.exceptions import LayoutError
+from hw_toolkit.kicad.layout_elk import ElkEdge, ElkNode, build_elk_layout
 from hw_toolkit.kicad.projector import refdes_map_for_bundle
 from hw_toolkit.core import Interface, ResearchBundle, SubsystemPick
 
 # ---------------------------------------------------------------------------
-# Layout policy (flat MVP)
+# Layout policy
 # ---------------------------------------------------------------------------
-
-# Subsystems are placed on a wrapped grid (not one long lane — that ran
-# parts off the page and fanned wires across the whole canvas). Cell size
-# adapts to the largest placed symbol so real KiCad symbols (which carry
-# their own geometry) don't overlap or sit absurdly far apart.
-_GRID_X_START_MM = 40.0
-_GRID_Y_START_MM = 50.0
-_IC_BODY_W_MM = 30.0    # fallback extent for synthesized (no-bbox) symbols
-_IC_BODY_H_MM = 30.0
-_POWER_DROP_MM = 25.4   # power symbol sits N mm above its IC
-_GROUND_DROP_MM = 20.0  # ground symbol sits N mm below
-
-# Cluster packing: members of one group are laid out in a mini-grid;
-# groups (blocks) are packed left-to-right and wrap past _PAGE_W_MM.
-_CLUSTER_COLS = 3       # members per row within a cluster
-_CLUSTER_GAP_MM = 12.0  # spacing between members inside a cluster
-_BLOCK_GAP_MM = 28.0    # spacing between clusters
-_PAGE_W_MM = 250.0      # wrap blocks once a row exceeds this width
+#
+# Placement + wiring are done by ELK (hw_toolkit.kicad.layout_elk), the
+# only layout path — there is no heuristic grid / point-to-point fallback.
+# The constants below only size SYNTHESIZED custom-IC bodies (real library
+# symbols carry their own geometry, measured empirically).
+_IC_BODY_W_MM = 30.0    # body width for synthesized (placeholder) symbols
+_IC_BODY_H_MM = 30.0    # body height for synthesized (placeholder) symbols
 
 # ---------------------------------------------------------------------------
 # Plan operations
@@ -359,131 +352,131 @@ def _kicad_footprint_for(package: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _symbol_extent(sub: SubsystemPick) -> tuple[float, float]:
-    """(width, height) in mm for grid sizing. Real symbols use their
-    library bbox; synthesized parts use the fixed body size."""
-    if sub.lib_id:
-        try:
-            from hw_toolkit.kicad.lib import load_symbol
-
-            x0, y0, x1, y1 = load_symbol(sub.lib_id).bbox()
-            return (abs(x1 - x0), abs(y1 - y0))
-        except Exception:
-            pass
-    return (_IC_BODY_W_MM, _IC_BODY_H_MM)
-
-
 _PASSIVE_CATEGORIES = {"resistor", "capacitor", "inductor"}
 
 
-def _effective_groups(bundle: ResearchBundle) -> dict[str, str]:
-    """Per-subsystem placement group, augmenting explicit `group` tags.
+@dataclass(frozen=True)
+class _SymbolPins:
+    """Pin geometry for one subsystem, in symbol-local mm (anchor at 0,0).
 
-    An ungrouped passive (R/C/L) is attached to the group of the
-    subsystem it shares the most connections with — so a decoupling cap
-    or pull-up clusters next to the part it serves instead of drifting
-    off on its own. Explicit groups (e.g. a Buck factory block) always win.
+    `offsets` maps the canonical port id → (dx, dy). For a real library
+    symbol the port id is the KiCad pin *number*; for a synthesized custom
+    IC it is the pin *name*. `resolve` maps an interface port token (a pin
+    name or number) to a canonical port id, or None if the symbol has no
+    such pin. `synth_pins`, when set, is the custom-IC pin list (with
+    anchor-relative `at`) to re-emit at the placed anchor.
     """
-    from collections import Counter, defaultdict
+    offsets: dict[str, tuple[float, float]]
+    resolve_map: dict[str, str]
+    synth_pins: tuple[dict[str, object], ...] | None = None
 
-    by_id = {s.id: s for s in bundle.subsystems}
-    group_of = {s.id: (s.group or s.id) for s in bundle.subsystems}
+    def resolve(self, token: str) -> str | None:
+        if token in self.offsets:
+            return token
+        return self.resolve_map.get(token)
 
-    neighbors: dict[str, Counter] = defaultdict(Counter)
-    for itf in bundle.interfaces:
-        a, b = itf.from_subsystem, itf.to_subsystem
-        if a in by_id and b in by_id and a != b:
-            neighbors[a][b] += 1
-            neighbors[b][a] += 1
 
-    for s in bundle.subsystems:
-        if s.group or s.category not in _PASSIVE_CATEGORIES:
-            continue
-        counts = neighbors.get(s.id)
-        if not counts:
-            continue
-        # Most-connected neighbor, preferring a non-passive (the IC it serves).
-        best = max(
-            counts,
-            key=lambda nid: (counts[nid],
-                             by_id[nid].category not in _PASSIVE_CATEGORIES),
+def _measure_real_offsets(
+    lib_ids: list[str], measure_dir: Path
+) -> dict[str, dict[str, tuple[float, float]]]:
+    """Empirically measure pin offsets for each real library symbol.
+
+    Scratch-places every unique `lib_id` at the origin in a throwaway
+    `.kicad_sch` and reads back `list_component_pins` — sidesteps the
+    lib-coord (Y-up) vs placed-coord (Y-down) conversion entirely, since
+    the placed pin position IS the offset from a (0,0) anchor.
+    """
+    from hw_toolkit.kicad import sch_ops
+
+    out: dict[str, dict[str, tuple[float, float]]] = {}
+    uniques = list(dict.fromkeys(lib_ids))
+    if not uniques:
+        return out
+    p = measure_dir / "_measure.kicad_sch"
+    write_blank_schematic(p, overwrite=True)
+    refs: dict[str, str] = {}
+    for i, lib_id in enumerate(uniques):
+        ref = f"M{i}"
+        try:
+            sch_ops.add_ic(path=p, ref=ref, lib_id=lib_id, at=(0.0, 0.0))
+            refs[lib_id] = ref
+        except Exception as e:  # symbol failed to place → can't lay it out
+            raise LayoutError(
+                reason="symbol_unplaceable",
+                detail=f"{lib_id!r} could not be scratch-placed: {e}",
+            ) from e
+    sch = sch_ops._load(p)
+    for lib_id, ref in refs.items():
+        pins = sch.list_component_pins(ref) or []
+        out[lib_id] = {num: (pos.x, pos.y) for num, pos in pins}
+    return out
+
+
+def _name_to_number(lib_id: str) -> dict[str, str]:
+    """Build a {pin name|number → pin number} map from the library symbol.
+
+    First-seen wins on a duplicate name (e.g. several GND pins) — matches
+    the old `sch_ops._resolve_pin_number` behaviour.
+    """
+    mapping: dict[str, str] = {}
+    try:
+        from hw_toolkit.kicad.lib import load_symbol
+
+        for pin in load_symbol(lib_id).pins:
+            mapping.setdefault(pin.name, pin.number)
+            mapping.setdefault(pin.number, pin.number)
+    except Exception:
+        pass
+    return mapping
+
+
+def _symbol_pins_for(
+    sub: SubsystemPick,
+    ports: list[str],
+    real_offsets: dict[str, dict[str, tuple[float, float]]],
+) -> _SymbolPins:
+    """Resolve one subsystem's pin geometry for the ELK graph."""
+    if sub.lib_id:
+        offsets = real_offsets.get(sub.lib_id, {})
+        return _SymbolPins(
+            offsets=offsets,
+            resolve_map=_name_to_number(sub.lib_id),
         )
-        group_of[s.id] = group_of.get(best, best)
-    return group_of
-
-
-def _place_subsystems(
-    bundle: ResearchBundle,
-) -> dict[str, tuple[float, float]]:
-    """Cluster-aware placement → `{subsystem_id: (x, y)}`.
-
-    Parts sharing an effective group are packed into a tight mini-grid
-    block (factory blocks plus auto-attached passives), so their internal
-    wires stay short. Within a block the anchor (the non-passive the
-    cluster is built around) is placed first. Blocks are laid
-    left-to-right and wrap past `_PAGE_W_MM`.
-    """
-    subs = bundle.subsystems
-    sizes = {s.id: _symbol_extent(s) for s in subs}
-
-    # NOTE: ELK placement-only (hw_toolkit.kicad.layout_elk) was evaluated
-    # and regresses here — without ELK's orthogonal routing, layered
-    # placement + point-to-point wires fan worse than tight clusters. ELK
-    # is only worth wiring in once its edge routing is consumed too.
-    group_of = _effective_groups(bundle)
-
-    # Group, preserving first-seen order; anchor (non-passive) first in each.
-    groups: dict[str, list[SubsystemPick]] = {}
-    for s in subs:
-        groups.setdefault(group_of[s.id], []).append(s)
-    for key, members in groups.items():
-        members.sort(key=lambda m: (m.category in _PASSIVE_CATEGORIES,
-                                    m.id != key))
-
-    positions: dict[str, tuple[float, float]] = {}
-
-    cursor_x = _GRID_X_START_MM
-    row_y = _GRID_Y_START_MM
-    row_max_h = 0.0
-    for members in groups.values():
-        # Mini-grid dimensions for this block.
-        cols = max(1, min(len(members), _CLUSTER_COLS))
-        cell_w = max(sizes[m.id][0] for m in members) + _CLUSTER_GAP_MM
-        cell_h = (max(sizes[m.id][1] for m in members)
-                  + _GROUND_DROP_MM + _CLUSTER_GAP_MM)
-        n_rows = (len(members) + cols - 1) // cols
-        block_w = cols * cell_w
-        block_h = n_rows * cell_h
-
-        # Wrap to a new block-row if this block overflows the page width.
-        if cursor_x > _GRID_X_START_MM and cursor_x + block_w > _PAGE_W_MM:
-            cursor_x = _GRID_X_START_MM
-            row_y += row_max_h + _BLOCK_GAP_MM
-            row_max_h = 0.0
-
-        for i, m in enumerate(members):
-            mx = cursor_x + (i % cols) * cell_w
-            my = row_y + (i // cols) * cell_h
-            positions[m.id] = (_snap_grid(mx), _snap_grid(my))
-
-        cursor_x += block_w + _BLOCK_GAP_MM
-        row_max_h = max(row_max_h, block_h)
-
-    return positions
+    # Synthesized custom IC: pin layout generated about a (0,0) anchor, so
+    # each pin's `at` IS its offset. Port id == pin name.
+    pins = _synthesize_pins(sub, (0.0, 0.0), ports=ports)
+    offsets = {
+        str(p["name"]): (float(p["at"][0]), float(p["at"][1])) for p in pins
+    }
+    return _SymbolPins(
+        offsets=offsets,
+        resolve_map={},  # custom-IC interfaces always reference pin names
+        synth_pins=tuple(pins),
+    )
 
 
 def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPlan:
-    """Build the full sequence of MCP ops needed to render `bundle` as a
-    flat schematic. Caller has already (or will) `write_blank_schematic`.
+    """Build the full sequence of ops needed to render `bundle` as a flat
+    schematic, placed + wired by ELK (the only layout path).
+
+    The whole drawing — subsystem symbols, per-subsystem GND symbols, and
+    per-rail PWR_FLAGs — is laid out as one ELK graph: each symbol is a
+    node carrying its empirically-measured pin offsets as fixed ports, and
+    every connection (interface pin↔pin, GND-symbol↔GND-pin,
+    flag↔hub-pin) is an ELK edge. ELK returns placement anchors plus
+    orthogonal wire routes; we place each symbol so its pins land on the
+    fixed ports, then emit one straight `AddWire` per route segment.
+
+    Raises `LayoutError` if ELK is unavailable or the layout fails — there
+    is no heuristic / point-to-point fallback.
     """
     sch = str(sch_path)
-    ops: list[SchematicOp] = []
     refmap = refdes_map_for_bundle(bundle)
-    pwr_counter = 0
+    sub_by_id = {s.id: s for s in bundle.subsystems}
 
-    # Derive each subsystem's port set from the bundle's interfaces.
-    # The notebook flow never sets `subsystem.port_bindings` directly —
-    # nets/connects produce interfaces, and ports fall out of those.
+    # Derive each subsystem's port set from the bundle's interfaces. The
+    # notebook flow never sets `subsystem.port_bindings` directly — nets /
+    # connects produce interfaces, and ports fall out of those.
     ports_by_sub: dict[str, list[str]] = {s.id: [] for s in bundle.subsystems}
     for iface in bundle.interfaces:
         if iface.from_subsystem in ports_by_sub:
@@ -491,199 +484,142 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
         if iface.to_subsystem in ports_by_sub:
             ports_by_sub[iface.to_subsystem].append(iface.to_port)
 
-    # 1. Place subsystems. Parts sharing a `group` (e.g. a buck IC + its
-    #    passives) are packed into one tight cluster; clusters are then
-    #    arranged on a wrapped grid. Keeps a block's internal wires short.
-    positions = _place_subsystems(bundle)
+    # --- 1. Measure pin geometry (empirically for real symbols) ----------
+    real_lib_ids = [s.lib_id for s in bundle.subsystems if s.lib_id]
+    measure_dir = Path(tempfile.mkdtemp(prefix="hw_elk_pins_"))
+    try:
+        real_offsets = _measure_real_offsets(real_lib_ids, measure_dir)
+    finally:
+        shutil.rmtree(measure_dir, ignore_errors=True)
+
+    sym_pins: dict[str, _SymbolPins] = {}
     for sub in bundle.subsystems:
-        cx, cy = positions[sub.id]
+        ports = list(sub.port_bindings.keys()) + ports_by_sub.get(sub.id, [])
+        sym_pins[sub.id] = _symbol_pins_for(sub, ports, real_offsets)
+
+    # --- 2. Build ELK nodes/edges ----------------------------------------
+    nodes: list[ElkNode] = [
+        ElkNode(id=s.id, pin_offsets=sym_pins[s.id].offsets)
+        for s in bundle.subsystems
+    ]
+    edges: list[ElkEdge] = []
+
+    # 2a. Interface pin↔pin edges (skip the `external` pseudo-subsystem).
+    for iface in bundle.interfaces:
+        a, b = iface.from_subsystem, iface.to_subsystem
+        if a == "external" or b == "external":
+            continue
+        if a not in sym_pins or b not in sym_pins:
+            continue
+        pa = sym_pins[a].resolve(iface.from_port)
+        pb = sym_pins[b].resolve(iface.to_port)
+        if pa is None or pb is None:
+            raise LayoutError(
+                reason="unresolved_pin",
+                detail=(f"interface {iface.id!r}: "
+                        f"{a}.{iface.from_port}→{b}.{iface.to_port} — "
+                        f"pin not found on the placed symbol"),
+            )
+        edges.append(ElkEdge(src=(a, pa), dst=(b, pb)))
+
+    # 2b. One GND symbol per subsystem that exposes a GND port, tied to
+    #     that pin (so the pin sits on the GND net instead of reading as a
+    #     floating `power_in`). Each GND symbol is a 1-pin node.
+    gnd_nodes: list[tuple[str, str]] = []  # (node_id, refdes)
+    pwr_counter = 0
+    for sub in bundle.subsystems:
+        ports = ports_by_sub.get(sub.id, [])
+        gnd_port = next((p for p in ports if p.upper() in _GROUND_NAMES), None)
+        if gnd_port is None:
+            continue
+        port_id = sym_pins[sub.id].resolve(gnd_port)
+        if port_id is None:
+            continue
+        pwr_counter += 1
+        nid = f"GND\x1f{sub.id}"
+        ref = f"#PWR{pwr_counter:03d}"
+        gnd_nodes.append((nid, ref))
+        nodes.append(ElkNode(id=nid, pin_offsets={"1": (0.0, 0.0)}))
+        edges.append(ElkEdge(src=(nid, "1"), dst=(sub.id, port_id)))
+
+    # 2c. One PWR_FLAG per power-rail hub pin so ERC sees the rail driven.
+    #     Skip rails whose hub pin is itself a `power_out` driver (two
+    #     power_out pins on one net trips ERC). Each flag is a 1-pin node.
+    power_hubs: dict[tuple[str, str], None] = {}
+    for iface in bundle.interfaces:
+        if iface.type != "power" or iface.from_subsystem == "external":
+            continue
+        power_hubs.setdefault((iface.from_subsystem, iface.from_port), None)
+
+    flag_nodes: list[tuple[str, str]] = []  # (node_id, refdes)
+    for hub_sub, hub_port in power_hubs:
+        if hub_sub not in sym_pins:
+            continue
+        port_id = sym_pins[hub_sub].resolve(hub_port)
+        if port_id is None:
+            continue
+        hub_pick = sub_by_id.get(hub_sub)
+        if hub_pick and _electrical_type(hub_pick, hub_port) == "power_out":
+            continue
+        pwr_counter += 1
+        nid = f"FLG\x1f{hub_sub}\x1f{hub_port}"
+        ref = f"#FLG{pwr_counter:03d}"
+        flag_nodes.append((nid, ref))
+        nodes.append(ElkNode(id=nid, pin_offsets={"1": (0.0, 0.0)}))
+        edges.append(ElkEdge(src=(nid, "1"), dst=(hub_sub, port_id)))
+
+    # --- 3. Run ELK ------------------------------------------------------
+    layout = build_elk_layout(nodes, edges)
+
+    # --- 4. Emit symbol placements at the ELK anchors --------------------
+    ops: list[SchematicOp] = []
+    for sub in bundle.subsystems:
+        ax, ay = layout.anchors[sub.id]
         ref = refmap[sub.id]
+        sp = sym_pins[sub.id]
         if sub.lib_id:
-            # Real KiCad library part — place the actual symbol. Pins come
-            # from the library, so we synthesize none; wires resolve against
-            # the placed symbol at write time.
             ops.append(
                 AddSymbol(
                     kicad_sch=sch,
                     ref=ref,
                     lib_id=sub.lib_id,
                     value=sub.mpn,
-                    at_x=cx,
-                    at_y=cy,
+                    at_x=ax,
+                    at_y=ay,
                     footprint=sub.footprint or _kicad_footprint_for(sub.package) or None,
                 )
             )
             continue
-        # Merge auto-derived ports w/ any legacy port_bindings on the pick.
-        ports = list(sub.port_bindings.keys()) + ports_by_sub.get(sub.id, [])
-        pins = _synthesize_pins(sub, (cx, cy), ports=ports)
-        normalized_fp = sub.footprint or _kicad_footprint_for(sub.package)
+        # Custom IC: re-emit synthesized pins shifted to the placed anchor
+        # (offsets were measured about a 0,0 anchor).
+        pins = tuple(
+            {**p, "at": [float(p["at"][0]) + ax, float(p["at"][1]) + ay]}
+            for p in (sp.synth_pins or ())
+        )
         ops.append(
             AddCustomIC(
                 kicad_sch=sch,
                 ref=ref,
                 name=sub.mpn,
-                at_x=cx,
-                at_y=cy,
-                pins=tuple(pins),
-                footprint=normalized_fp or None,
+                at_x=ax,
+                at_y=ay,
+                pins=pins,
+                footprint=(sub.footprint or _kicad_footprint_for(sub.package)) or None,
             )
         )
 
-    # Build the (refdes, port) → (x, y) lookup once after step 1 so the
-    # GND-symbol-to-IC-pin wire (step 2) + PWR_FLAG-to-hub-pin wire
-    # (step 4) can resolve coords without re-computing the layout math.
-    pin_xy_early: dict[tuple[str, str], tuple[float, float]] = {}
-    for op in ops:
-        if isinstance(op, AddCustomIC):
-            for p in op.pins:
-                pin_xy_early[(op.ref, p["name"])] = (
-                    float(p["at"][0]), float(p["at"][1]),
-                )
-
-    # 2. Drop a GND symbol per subsystem ONLY if that subsystem has a GND
-    #    port. The symbol is wired to the IC's GND pin so it actually
-    #    sits on the GND net (otherwise ERC sees it as a floating
-    #    `power_in` pin and emits `pin_not_connected`).
-    for sub in bundle.subsystems:
-        ports = ports_by_sub.get(sub.id, [])
-        gnd_port = next((p for p in ports if p.upper() in _GROUND_NAMES), None)
-        if gnd_port is None:
-            continue
-        cx, cy = positions[sub.id]
-        gnd_y = _snap_grid(cy + _GROUND_DROP_MM)
-        pwr_counter += 1
+    for nid, ref in gnd_nodes:
+        ax, ay = layout.anchors[nid]
+        ops.append(AddGround(kicad_sch=sch, ref=ref, at_x=ax, at_y=ay))
+    for nid, ref in flag_nodes:
+        ax, ay = layout.anchors[nid]
         ops.append(
-            AddGround(
-                kicad_sch=sch,
-                ref=f"#PWR{pwr_counter:03d}",
-                at_x=cx,
-                at_y=gnd_y,
-            )
-        )
-        # Wire the GND symbol's anchor to the IC's GND pin.
-        ic_ref = refmap[sub.id]
-        ic_gnd_xy = pin_xy_early.get((ic_ref, gnd_port))
-        if ic_gnd_xy is not None:
-            ops.append(
-                AddWire(
-                    kicad_sch=sch,
-                    src=f"@{cx},{gnd_y}",
-                    dst=f"@{ic_gnd_xy[0]},{ic_gnd_xy[1]}",
-                )
-            )
-
-    # 3. Wires per interface — pin to pin. Group star-expanded
-    #    interfaces by their shared source so colinear consumers (same Y
-    #    or same X as the hub) collapse to one straight wire instead of
-    #    two overlapping wires that KiCad splinters into `wire_dangling`
-    #    sub-pixel fragments.
-    wires_by_src: dict[str, list[str]] = {}
-    for iface in bundle.interfaces:
-        for src, dst in _interface_wire_endpoints(iface, bundle, refmap):
-            wires_by_src.setdefault(src, []).append(dst)
-
-    def _resolve(endpoint: str) -> tuple[float, float] | None:
-        if "." not in endpoint:
-            return None
-        ref, port = endpoint.split(".", 1)
-        return pin_xy_early.get((ref, port))
-
-    for src, dsts in wires_by_src.items():
-        src_xy = _resolve(src)
-        if src_xy is not None and len(dsts) > 1:
-            # Chain colinear consumers (hub → c1 → c2 → c3) so each pin
-            # sits at a wire endpoint. KiCad treats wire-to-pin endpoint
-            # contacts as connected without needing junction markers;
-            # mid-segment pins would otherwise read as "not driven".
-            dst_xys = [_resolve(d) for d in dsts]
-            if all(xy is not None for xy in dst_xys):
-                ys = {round(xy[1], 4) for xy in dst_xys}  # type: ignore[index]
-                xs = {round(xy[0], 4) for xy in dst_xys}  # type: ignore[index]
-                if len(ys) == 1 and round(src_xy[1], 4) in ys:
-                    # All horizontal; chain by ascending |x - src_x|.
-                    ordered = sorted(
-                        zip(dsts, dst_xys),
-                        key=lambda pair: abs(pair[1][0] - src_xy[0]),  # type: ignore[index]
-                    )
-                    prev = src
-                    for dst_name, xy in ordered:
-                        ops.append(AddWire(kicad_sch=sch, src=prev, dst=dst_name))
-                        prev = dst_name
-                    continue
-                if len(xs) == 1 and round(src_xy[0], 4) in xs:
-                    ordered = sorted(
-                        zip(dsts, dst_xys),
-                        key=lambda pair: abs(pair[1][1] - src_xy[1]),  # type: ignore[index]
-                    )
-                    prev = src
-                    for dst_name, xy in ordered:
-                        ops.append(AddWire(kicad_sch=sch, src=prev, dst=dst_name))
-                        prev = dst_name
-                    continue
-        for dst in dsts:
-            ops.append(AddWire(kicad_sch=sch, src=src, dst=dst))
-
-    # 4. PWR_FLAG per declared power net so KiCad ERC sees each rail as
-    #    driven (no more `power_pin_not_driven`). Place each flag offset
-    #    from the hub pin (first member of the net = star-expansion
-    #    source) and wire it back to that pin. GND rails carry voltage_v=0;
-    #    high-voltage rails (3V3/5V/etc.) get one PWR_FLAG each.
-    pin_xy: dict[tuple[str, str], tuple[float, float]] = {}
-    for op in ops:
-        if isinstance(op, AddCustomIC):
-            for p in op.pins:
-                pin_xy[(op.ref, p["name"])] = (
-                    float(p["at"][0]), float(p["at"][1]),
-                )
-
-    power_hubs: dict[tuple[str, str], Interface] = {}
-    for iface in bundle.interfaces:
-        if iface.type != "power":
-            continue
-        if iface.from_subsystem == "external":
-            continue
-        power_hubs.setdefault(
-            (iface.from_subsystem, iface.from_port), iface,
+            AddPower(kicad_sch=sch, ref=ref, label="PWR_FLAG", at_x=ax, at_y=ay)
         )
 
-    flag_offset_idx = 0
-    sub_by_id = {s.id: s for s in bundle.subsystems}
-    for (hub_sub, hub_port), iface in power_hubs.items():
-        hub_ref = refmap.get(hub_sub)
-        if hub_ref is None:
-            continue
-        hub_xy = pin_xy.get((hub_ref, hub_port))
-        if hub_xy is None:
-            continue
-        # Skip PWR_FLAG on rails that already have a `power_out` driver —
-        # KiCad ERC then complains about two power_out pins connected.
-        hub_pick = sub_by_id.get(hub_sub)
-        if hub_pick and _electrical_type(hub_pick, hub_port) == "power_out":
-            continue
-        # Place the PWR_FLAG on the SAME row as the hub pin (axis-aligned
-        # wire — KiCad gets unhappy with diagonal wires and breaks them
-        # into sub-pixel segments that trigger `wire_dangling`).
-        flag_x = _snap_grid(hub_xy[0] + 10.16)  # 8 grid steps right
-        flag_y = hub_xy[1]                       # same Y → horizontal wire
-        pwr_counter += 1
-        ops.append(
-            AddPower(
-                kicad_sch=sch,
-                ref=f"#FLG{pwr_counter:03d}",
-                label="PWR_FLAG",
-                at_x=flag_x,
-                at_y=flag_y,
-            )
-        )
-        ops.append(
-            AddWire(
-                kicad_sch=sch,
-                src=f"@{flag_x},{flag_y}",
-                dst=f"@{hub_xy[0]},{hub_xy[1]}",
-            )
-        )
-        flag_offset_idx += 1
+    # --- 5. Emit ELK's orthogonal routes as straight wire segments -------
+    for x1, y1, x2, y2 in layout.wires:
+        ops.append(AddWire(kicad_sch=sch, src=f"@{x1},{y1}", dst=f"@{x2},{y2}"))
 
     return SchematicPlan(kicad_sch=Path(sch_path), ops=tuple(ops))
 
@@ -703,27 +639,6 @@ def _label_for_power_interface(iface: Interface) -> str:
     whole = int(v)
     frac = round((v - whole) * 10)
     return f"{whole}V{frac}" if frac else f"{whole}V"
-
-
-def _interface_wire_endpoints(
-    iface: Interface,
-    bundle: ResearchBundle,
-    refmap: dict[str, str],
-) -> list[tuple[str, str]]:
-    """Translate one Interface into the (src, dst) wire pairs to draw.
-
-    For pin↔pin connections we use `<refdes>.<port>` on both ends. The
-    "external" pseudo-subsystem (e.g. battery → buck) is rendered via
-    the power-rail symbol already placed at the consumer pin, so no
-    two-endpoint wire is emitted here.
-    """
-    if iface.from_subsystem == "external" or iface.to_subsystem == "external":
-        return []
-    src_ref = refmap.get(iface.from_subsystem)
-    dst_ref = refmap.get(iface.to_subsystem)
-    if src_ref is None or dst_ref is None:
-        return []
-    return [(f"{src_ref}.{iface.from_port}", f"{dst_ref}.{iface.to_port}")]
 
 
 # ---------------------------------------------------------------------------
