@@ -85,18 +85,21 @@ def Buck(
         p["vin"], p["gnd"], p["en"], p["sw"], p["boot"], p["fb"],
     )
 
+    # All parts share group=id so the planner lays them out as one tight
+    # cluster (short internal wires) instead of scattering the passives.
     ic = board.module(
         id=id, category="buck_converter", mpn=mpn, package=package,
         lib_id=lib_id, manufacturer=manufacturer, price_usd=price_usd,
+        group=id,
     )
 
     # Support components — each auto-resolves to a real Device:C/L/R symbol.
-    cin_m = board.capacitor(f"{id}_cin", cin, package=cap_package)
-    cout_m = board.capacitor(f"{id}_cout", cout, package=cap_package)
-    cboot_m = board.capacitor(f"{id}_cboot", cboot, package="0402")
-    l_m = board.inductor(f"{id}_l", l, package=ind_package)
-    rtop_m = board.resistor(f"{id}_rtop", rtop, package=res_package)
-    rbot_m = board.resistor(f"{id}_rbot", rbot, package=res_package)
+    cin_m = board.capacitor(f"{id}_cin", cin, package=cap_package, group=id)
+    cout_m = board.capacitor(f"{id}_cout", cout, package=cap_package, group=id)
+    cboot_m = board.capacitor(f"{id}_cboot", cboot, package="0402", group=id)
+    l_m = board.inductor(f"{id}_l", l, package=ind_package, group=id)
+    rtop_m = board.resistor(f"{id}_rtop", rtop, package=res_package, group=id)
+    rbot_m = board.resistor(f"{id}_rbot", rbot, package=res_package, group=id)
 
     # Rails + internal nodes.
     gnd_net = gnd if gnd is not None else (board.nets.get("gnd") or board.gnd())

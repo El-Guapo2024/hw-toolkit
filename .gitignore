@@ -49,3 +49,4 @@ docs/projects/test_*/
 .claude/worktrees/
 
 .tmp/
+*.kicad_prl

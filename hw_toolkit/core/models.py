@@ -40,6 +40,11 @@ class SubsystemPick(BaseModel):
     lib_id: str | None = None
     footprint: str | None = None
 
+    # Placement cluster. Parts sharing a `group` (e.g. a buck IC and its
+    # Cin/Cout/L/feedback divider) are laid out as one tight block by the
+    # planner, so their internal wires stay short. None → placed on its own.
+    group: str | None = None
+
     # BOM + stock
     qty_per_board: int = Field(default=1, ge=1)
     price_usd: float = Field(default=0.0, ge=0)

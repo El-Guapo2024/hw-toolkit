@@ -38,13 +38,17 @@ from hw_toolkit.core import Interface, ResearchBundle, SubsystemPick
 # their own geometry) don't overlap or sit absurdly far apart.
 _GRID_X_START_MM = 40.0
 _GRID_Y_START_MM = 50.0
-_GRID_MAX_COLS = 5      # wrap to a new row after this many parts
-_COL_GAP_MM = 30.0      # horizontal room between cells for wiring
-_ROW_GAP_MM = 20.0      # vertical room between rows (on top of the GND drop)
 _IC_BODY_W_MM = 30.0    # fallback extent for synthesized (no-bbox) symbols
 _IC_BODY_H_MM = 30.0
 _POWER_DROP_MM = 25.4   # power symbol sits N mm above its IC
 _GROUND_DROP_MM = 20.0  # ground symbol sits N mm below
+
+# Cluster packing: members of one group are laid out in a mini-grid;
+# groups (blocks) are packed left-to-right and wrap past _PAGE_W_MM.
+_CLUSTER_COLS = 3       # members per row within a cluster
+_CLUSTER_GAP_MM = 12.0  # spacing between members inside a cluster
+_BLOCK_GAP_MM = 28.0    # spacing between clusters
+_PAGE_W_MM = 250.0      # wrap blocks once a row exceeds this width
 
 # ---------------------------------------------------------------------------
 # Plan operations
@@ -369,6 +373,53 @@ def _symbol_extent(sub: SubsystemPick) -> tuple[float, float]:
     return (_IC_BODY_W_MM, _IC_BODY_H_MM)
 
 
+def _place_subsystems(
+    subs: "list[SubsystemPick]",
+) -> dict[str, tuple[float, float]]:
+    """Cluster-aware placement → `{subsystem_id: (x, y)}`.
+
+    Parts sharing a `group` are packed into a tight mini-grid block (so a
+    factory block's internal wires stay short); ungrouped parts are their
+    own block. Blocks are laid left-to-right and wrap past `_PAGE_W_MM`.
+    """
+    # Group, preserving first-seen order.
+    groups: dict[str, list[SubsystemPick]] = {}
+    for s in subs:
+        groups.setdefault(s.group or s.id, []).append(s)
+
+    sizes = {s.id: _symbol_extent(s) for s in subs}
+    positions: dict[str, tuple[float, float]] = {}
+
+    cursor_x = _GRID_X_START_MM
+    row_y = _GRID_Y_START_MM
+    row_max_h = 0.0
+    for members in groups.values():
+        # Mini-grid dimensions for this block.
+        cols = max(1, min(len(members), _CLUSTER_COLS))
+        cell_w = max(sizes[m.id][0] for m in members) + _CLUSTER_GAP_MM
+        cell_h = (max(sizes[m.id][1] for m in members)
+                  + _GROUND_DROP_MM + _CLUSTER_GAP_MM)
+        n_rows = (len(members) + cols - 1) // cols
+        block_w = cols * cell_w
+        block_h = n_rows * cell_h
+
+        # Wrap to a new block-row if this block overflows the page width.
+        if cursor_x > _GRID_X_START_MM and cursor_x + block_w > _PAGE_W_MM:
+            cursor_x = _GRID_X_START_MM
+            row_y += row_max_h + _BLOCK_GAP_MM
+            row_max_h = 0.0
+
+        for i, m in enumerate(members):
+            mx = cursor_x + (i % cols) * cell_w
+            my = row_y + (i // cols) * cell_h
+            positions[m.id] = (_snap_grid(mx), _snap_grid(my))
+
+        cursor_x += block_w + _BLOCK_GAP_MM
+        row_max_h = max(row_max_h, block_h)
+
+    return positions
+
+
 def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPlan:
     """Build the full sequence of MCP ops needed to render `bundle` as a
     flat schematic. Caller has already (or will) `write_blank_schematic`.
@@ -388,22 +439,12 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
         if iface.to_subsystem in ports_by_sub:
             ports_by_sub[iface.to_subsystem].append(iface.to_port)
 
-    # 1. Place each subsystem on a wrapped grid. Cell size adapts to the
-    #    largest symbol so real-symbol parts neither overlap nor sprawl.
-    sizes = {s.id: _symbol_extent(s) for s in bundle.subsystems}
-    max_w = max((w for w, _ in sizes.values()), default=_IC_BODY_W_MM)
-    max_h = max((h for _, h in sizes.values()), default=_IC_BODY_H_MM)
-    col_step = _snap_grid(max_w + _COL_GAP_MM)
-    row_step = _snap_grid(max_h + _GROUND_DROP_MM + _ROW_GAP_MM)
-    n_subs = len(bundle.subsystems)
-    cols = max(1, min(n_subs, _GRID_MAX_COLS))
-
-    positions: dict[str, tuple[float, float]] = {}
-    for i, sub in enumerate(bundle.subsystems):
-        col, row = i % cols, i // cols
-        cx = _snap_grid(_GRID_X_START_MM + col * col_step)
-        cy = _snap_grid(_GRID_Y_START_MM + row * row_step)
-        positions[sub.id] = (cx, cy)
+    # 1. Place subsystems. Parts sharing a `group` (e.g. a buck IC + its
+    #    passives) are packed into one tight cluster; clusters are then
+    #    arranged on a wrapped grid. Keeps a block's internal wires short.
+    positions = _place_subsystems(bundle.subsystems)
+    for sub in bundle.subsystems:
+        cx, cy = positions[sub.id]
         ref = refmap[sub.id]
         if sub.lib_id:
             # Real KiCad library part — place the actual symbol. Pins come
