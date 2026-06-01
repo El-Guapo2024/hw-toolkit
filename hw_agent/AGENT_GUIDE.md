@@ -173,6 +173,24 @@ Cell N (code):      board.export_kicad("<id>.zip", unzip=True)
 
 Keep cells small — one module per cell makes ERC failures easy to localize.
 
+### Seeing the schematic as you build
+
+Call `board.show()` to render the current schematic inline (scaled SVG) —
+put it after subsystem cells so the engineer watches the board grow step
+by step, not just at the end:
+
+```python
+mcu = board.module(...)
+sensor = board.module(...)
+board.show()        # inline render so far
+```
+
+`render_sch_svg(board.sch_path, out_dir=...)` writes a standalone `.svg`
+file (and you can rsvg-convert it to PNG) for a VS Code pane. Always
+render the final schematic before finishing — don't hand back only a zip.
+Layout is auto-gridded; wires are point-to-point (some crossings are
+expected), so judge correctness from ERC, not from wire aesthetics.
+
 ## 5 — Executing the notebook
 
 ```bash

@@ -32,14 +32,19 @@ from hw_toolkit.core import Interface, ResearchBundle, SubsystemPick
 # Layout policy (flat MVP)
 # ---------------------------------------------------------------------------
 
-# A4 ≈ 297 × 210 mm. Leave margin; place subsystems on a horizontal lane.
-_LANE_Y_MM = 100.0
-_LANE_X_START_MM = 60.0
-_LANE_X_STEP_MM = 80.0
-_IC_BODY_W_MM = 30.0
+# Subsystems are placed on a wrapped grid (not one long lane — that ran
+# parts off the page and fanned wires across the whole canvas). Cell size
+# adapts to the largest placed symbol so real KiCad symbols (which carry
+# their own geometry) don't overlap or sit absurdly far apart.
+_GRID_X_START_MM = 40.0
+_GRID_Y_START_MM = 50.0
+_GRID_MAX_COLS = 5      # wrap to a new row after this many parts
+_COL_GAP_MM = 30.0      # horizontal room between cells for wiring
+_ROW_GAP_MM = 20.0      # vertical room between rows (on top of the GND drop)
+_IC_BODY_W_MM = 30.0    # fallback extent for synthesized (no-bbox) symbols
 _IC_BODY_H_MM = 30.0
 _POWER_DROP_MM = 25.4   # power symbol sits N mm above its IC
-_GROUND_DROP_MM = 25.4  # ground symbol sits N mm below
+_GROUND_DROP_MM = 20.0  # ground symbol sits N mm below
 
 # ---------------------------------------------------------------------------
 # Plan operations
@@ -350,6 +355,20 @@ def _kicad_footprint_for(package: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _symbol_extent(sub: SubsystemPick) -> tuple[float, float]:
+    """(width, height) in mm for grid sizing. Real symbols use their
+    library bbox; synthesized parts use the fixed body size."""
+    if sub.lib_id:
+        try:
+            from hw_toolkit.kicad.lib import load_symbol
+
+            x0, y0, x1, y1 = load_symbol(sub.lib_id).bbox()
+            return (abs(x1 - x0), abs(y1 - y0))
+        except Exception:
+            pass
+    return (_IC_BODY_W_MM, _IC_BODY_H_MM)
+
+
 def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPlan:
     """Build the full sequence of MCP ops needed to render `bundle` as a
     flat schematic. Caller has already (or will) `write_blank_schematic`.
@@ -369,11 +388,21 @@ def plan_schematic(bundle: ResearchBundle, sch_path: str | Path) -> SchematicPla
         if iface.to_subsystem in ports_by_sub:
             ports_by_sub[iface.to_subsystem].append(iface.to_port)
 
-    # 1. Place one custom IC per subsystem on a horizontal lane.
+    # 1. Place each subsystem on a wrapped grid. Cell size adapts to the
+    #    largest symbol so real-symbol parts neither overlap nor sprawl.
+    sizes = {s.id: _symbol_extent(s) for s in bundle.subsystems}
+    max_w = max((w for w, _ in sizes.values()), default=_IC_BODY_W_MM)
+    max_h = max((h for _, h in sizes.values()), default=_IC_BODY_H_MM)
+    col_step = _snap_grid(max_w + _COL_GAP_MM)
+    row_step = _snap_grid(max_h + _GROUND_DROP_MM + _ROW_GAP_MM)
+    n_subs = len(bundle.subsystems)
+    cols = max(1, min(n_subs, _GRID_MAX_COLS))
+
     positions: dict[str, tuple[float, float]] = {}
     for i, sub in enumerate(bundle.subsystems):
-        cx = _snap_grid(_LANE_X_START_MM + i * _LANE_X_STEP_MM)
-        cy = _snap_grid(_LANE_Y_MM)
+        col, row = i % cols, i // cols
+        cx = _snap_grid(_GRID_X_START_MM + col * col_step)
+        cy = _snap_grid(_GRID_Y_START_MM + row * row_step)
         positions[sub.id] = (cx, cy)
         ref = refmap[sub.id]
         if sub.lib_id:
