@@ -1,0 +1,7 @@
+{
+  "name": "hw-toolkit-elk-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": { "elkjs": "^0.9.3" }
+}

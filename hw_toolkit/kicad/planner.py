@@ -424,6 +424,12 @@ def _place_subsystems(
     left-to-right and wrap past `_PAGE_W_MM`.
     """
     subs = bundle.subsystems
+    sizes = {s.id: _symbol_extent(s) for s in subs}
+
+    # NOTE: ELK placement-only (hw_toolkit.kicad.layout_elk) was evaluated
+    # and regresses here — without ELK's orthogonal routing, layered
+    # placement + point-to-point wires fan worse than tight clusters. ELK
+    # is only worth wiring in once its edge routing is consumed too.
     group_of = _effective_groups(bundle)
 
     # Group, preserving first-seen order; anchor (non-passive) first in each.
@@ -434,7 +440,6 @@ def _place_subsystems(
         members.sort(key=lambda m: (m.category in _PASSIVE_CATEGORIES,
                                     m.id != key))
 
-    sizes = {s.id: _symbol_extent(s) for s in subs}
     positions: dict[str, tuple[float, float]] = {}
 
     cursor_x = _GRID_X_START_MM

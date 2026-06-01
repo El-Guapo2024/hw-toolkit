@@ -50,3 +50,5 @@ docs/projects/test_*/
 
 .tmp/
 *.kicad_prl
+tools/elk/node_modules/
+tools/elk/package-lock.json
