@@ -136,10 +136,14 @@ raw Agent SDK + OAuth (ToS). Per-user, local. Never centrally proxy OAuth.
 - **D. Delete `hw_agent/`** once nothing imports it.
 - **E.** Consolidate first, product backend after.
 
-## 8. Milestones (committed, branch `consolidate`)
-1. **M1 Phase-0 cleanup** — gitignore caches, drop stray render artifacts. ✅ first.
-2. **M2 move** `mcp_server/` → `hw_toolkit/mcp/`; fix refs; imports still green.
-3. **M3 migrate** `live_edit` + `router` off `hw_agent` → `hw_toolkit` (+ vendor `freerouting`).
-4. **M4 slim-rebuild** `designer` on `hw_toolkit` (the ~10 tools above).
-5. **M5 delete** `hw_agent/`; `attic/` holds parked research bits; full `pytest` green.
+## 8. Milestones (branch `consolidate`)
+1. **M1 Phase-0 cleanup** — gitignore caches, drop stray render artifacts. ✅
+2. **M2 move** `mcp_server/` → `hw_toolkit/mcp/`; fix refs. ✅ (125 tests)
+3. **M3 migrate** `live_edit`+`router` off `hw_agent`: relocate sch_ipc/pcb_writer/
+   kicad_paths/render_focus → `hw_toolkit/kicad/`, freerouting → `mcp/router/`. ✅
+4. **M4 slim-rebuild** `designer` on `hw_toolkit` (80→10 tools); old → `attic/`. ✅
+5. **M5 delete** `hw_agent/`; recovery tag `legacy-hw_agent`; full `pytest` green. ✅
+
+**CONSOLIDATION COMPLETE (2026-06-03).** One stack: `hw_toolkit` (library +
+`mcp/`). `hw_agent` deleted. 125 tests pass. Next: the copilot product (§5).
 ```
