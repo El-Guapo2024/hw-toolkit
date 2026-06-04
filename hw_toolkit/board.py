@@ -1164,6 +1164,42 @@ class Board:
             self.pcb_svg, max_width_px=max_width_px, max_height_px=max_height_px
         )
 
+    # ----------------------------------------------------- live render
+    def live(
+        self,
+        *,
+        pcb: bool = False,
+        max_width_px: int = 900,
+        max_height_px: int | None = None,
+    ) -> Any:
+        """Self-refreshing SVG pane (the OpenSCAD-studio loop for KiCad).
+
+        Watches the on-disk `.kicad_sch` (or `.kicad_pcb` when `pcb=True`) and
+        re-renders the pane whenever it changes — so `write_kicad()` /
+        `write_pcb()` (or an external eeschema save) updates the view with no
+        manual `show()`. Writes the file once up front so there's something to
+        watch. Returns a `LiveView`; call `.stop()` to stop watching.
+        """
+        from hw_toolkit.kicad.live_render import LiveView
+
+        if pcb:
+            self.write_pcb()
+            path = self.pcb_path
+            from hw_toolkit.kicad.pcb import render_pcb_svg
+
+            render = lambda: render_pcb_svg(path).read_bytes()  # noqa: E731
+            cap_h = max_height_px or 600
+        else:
+            self.write_kicad(overwrite=True)
+            path = self.sch_path
+            render = lambda: render_sch_svg(path).read_bytes()  # noqa: E731
+            cap_h = max_height_px or 500
+
+        to_html = lambda b: _responsive_svg(  # noqa: E731
+            b, max_width_px=max_width_px, max_height_px=cap_h
+        )
+        return LiveView(render, to_html, path).start()
+
     # ----------------------------------------------------- final artifact
     def export_kicad(
         self,

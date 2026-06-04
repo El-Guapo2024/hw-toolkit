@@ -35,11 +35,17 @@ board.net("VIN").connect("U1.1", "C1.1")   # nets via refs like "U1.1"
 board.i2c(...); board.spi(...); board.uart(...); board.can(...); board.swd(...); board.usbc(...)
 
 board.write_kicad()   # → .kicad_sch (ELK orthogonal layout, real symbols)
-board.show()          # inline SVG schematic
+board.show()          # inline SVG schematic (one-shot)
+board.live()          # self-refreshing SVG pane — re-renders on every file
+                      #   change; board.live(pcb=True) for the board
 board.write_pcb()     # → placed .kicad_pcb + ratsnest
 board.show_pcb()      # inline PCB SVG
 board.check_erc()     # ERC gate
 ```
+
+`board.live()` is the **studio loop** (mirrors openscad-studio): drop ONE
+`view = board.live()` at the top of the session; thereafter every
+`write_kicad()` you run repaints that pane by itself — no repeated `show()`.
 
 ## Hard rules (from the user's standing feedback)
 
