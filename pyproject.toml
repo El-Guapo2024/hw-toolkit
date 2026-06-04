@@ -39,13 +39,13 @@ dependencies = [
 test = ["pytest>=8.0"]
 
 [project.scripts]
-designer-mcp = "mcp_server.designer.server:main"
-router-mcp   = "mcp_server.router.server:main"
-live-edit-mcp = "mcp_server.live_edit.server:main"
+designer-mcp = "hw_toolkit.mcp.designer.server:main"
+router-mcp   = "hw_toolkit.mcp.router.server:main"
+live-edit-mcp = "hw_toolkit.mcp.live_edit.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["hw_agent*", "hw_toolkit*", "mcp_server*"]
+include = ["hw_agent*", "hw_toolkit*"]
 
 [tool.setuptools.package-data]
 hw_toolkit = ["py.typed"]

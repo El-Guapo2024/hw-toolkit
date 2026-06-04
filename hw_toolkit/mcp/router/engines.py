@@ -32,7 +32,7 @@ History:
   was dropped — users should not need Java + JAR; the hosted service
   handles it. The legacy local code in `hw_agent/freerouting.py` is
   retained only for the existing `pcb_route` tool in
-  `hw_agent/mcp_server.py` (separate concern).
+  `hw_agent legacy` (separate concern).
 
 Common contract:
 

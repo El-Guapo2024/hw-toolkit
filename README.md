@@ -85,7 +85,7 @@ hw_toolkit/
 
 ## Companion: MCP servers
 
-`mcp_server/` holds the research + KiCad-live-edit MCP servers used by
+`hw_toolkit/mcp/` holds the research + KiCad-live-edit MCP servers used by
 Claude Code agents during the part-picking phase (before the notebook).
 Not required to use the library.
 
