@@ -23,9 +23,6 @@ node_modules/
 *-backups/
 _autosave-*
 
-# hw_agent runtime / ephemeral
-hw_agent/.state.json
-hw_agent/.live/
 .claude/scheduled_tasks.lock
 
 # generated artifacts (regenerable)
@@ -52,3 +49,4 @@ docs/projects/test_*/
 *.kicad_prl
 tools/elk/node_modules/
 tools/elk/package-lock.json
+.ruff_cache/
