@@ -1,0 +1,61 @@
+{
+    "$schema": "https://schemas.kicad.org/erc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-06-03T17:54:45",
+    "ignored_checks": [
+        {
+            "description": "Global label only appears once in the schematic",
+            "key": "single_global_label"
+        },
+        {
+            "description": "Four connection points are joined together",
+            "key": "four_way_junction"
+        },
+        {
+            "description": "SPICE model issue",
+            "key": "simulation_model_issue"
+        },
+        {
+            "description": "Assigned footprint doesn't match footprint filters",
+            "key": "footprint_filter"
+        }
+    ],
+    "included_severities": [
+        "error",
+        "warning",
+        "exclusion"
+    ],
+    "kicad_version": "10.99.0",
+    "sheets": [
+        {
+            "path": "/",
+            "uuid_path": "/74ae4421-694e-4cd3-b553-2470503e9e6b",
+            "violations": [
+                {
+                    "description": "Pins of type Power output and Power output are connected",
+                    "items": [
+                        {
+                            "description": "Symbol #FLG004 Pin 1 [Power output, Line]",
+                            "pos": {
+                                "x": 1.4351,
+                                "y": 3.8354
+                            },
+                            "uuid": "66e30355-2e1a-4bea-8b7f-3100e850e0b4"
+                        },
+                        {
+                            "description": "Symbol #FLG006 Pin 1 [Power output, Line]",
+                            "pos": {
+                                "x": 2.0955,
+                                "y": 4.4958
+                            },
+                            "uuid": "ff96c7d4-9839-4f24-a774-0afe99f80a74"
+                        }
+                    ],
+                    "severity": "error",
+                    "type": "pin_to_pin"
+                }
+            ]
+        }
+    ],
+    "source": "power_brick.kicad_sch"
+}
