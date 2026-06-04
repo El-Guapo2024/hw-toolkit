@@ -45,7 +45,7 @@ live-edit-mcp = "hw_toolkit.mcp.live_edit.server:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["hw_agent*", "hw_toolkit*"]
+include = ["hw_toolkit*"]
 
 [tool.setuptools.package-data]
 hw_toolkit = ["py.typed"]

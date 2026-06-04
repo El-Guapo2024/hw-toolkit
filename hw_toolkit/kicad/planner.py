@@ -142,7 +142,7 @@ class SchematicPlan:
 _BLANK_SCH_TEMPLATE = """\
 (kicad_sch
 \t(version 20240210)
-\t(generator "hw_agent.pcb_designer")
+\t(generator "hw_toolkit.planner")
 \t(generator_version "1.0")
 \t(uuid "{uuid}")
 \t(paper "A4")

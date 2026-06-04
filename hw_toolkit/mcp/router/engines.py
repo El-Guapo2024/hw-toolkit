@@ -3,7 +3,7 @@
 Each engine takes a `.kicad_pcb` and applies routes in place. **Both
 engines are hosted by us** — we don't depend on third-party services.
 
-The MCP layer (`hw_agent/router_mcp.py`) is a thin dispatcher over these.
+The MCP layer (`hw_toolkit.mcp.router`) is a thin dispatcher over these.
 
 Engines:
 
@@ -30,9 +30,9 @@ History:
   ship.**
 - A `freerouting-local` (java -jar locally) engine briefly existed but
   was dropped — users should not need Java + JAR; the hosted service
-  handles it. The legacy local code in `hw_agent/freerouting.py` is
+  handles it. This freerouting manager (moved into hw_toolkit/mcp/router) is
   retained only for the existing `pcb_route` tool in
-  `hw_agent legacy` (separate concern).
+  a thin local fallback.
 
 Common contract:
 

@@ -140,7 +140,7 @@ class TaskManager:
     """
 
     def __init__(self, work_dir: Optional[Path] = None):
-        self.work_dir = (work_dir or Path("/tmp/hw_agent_routes")).resolve()
+        self.work_dir = (work_dir or Path("/tmp/hw_toolkit_routes")).resolve()
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self._tasks: dict[str, Task] = {}
         self._lock = threading.Lock()

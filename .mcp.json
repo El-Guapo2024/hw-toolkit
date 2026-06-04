@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "designer": {
+      "type": "stdio",
+      "command": ".venv/bin/python",
+      "args": ["-m", "hw_toolkit.mcp.designer.server"]
+    },
+    "router": {
+      "type": "stdio",
+      "command": ".venv/bin/python",
+      "args": ["-m", "hw_toolkit.mcp.router.server"]
+    },
+    "live-edit": {
+      "type": "stdio",
+      "command": ".venv/bin/python",
+      "args": ["-m", "hw_toolkit.mcp.live_edit.server"]
+    }
+  }
+}
