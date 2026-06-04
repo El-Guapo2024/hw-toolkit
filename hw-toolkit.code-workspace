@@ -1,0 +1,59 @@
+{
+  "folders": [
+    { "path": "." }
+  ],
+  "settings": {
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "jupyter.notebookFileRoot": "${workspaceFolder}",
+    "terminal.integrated.defaultProfile.osx": "zsh",
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.ipynb_checkpoints": true,
+      "**/.pytest_cache": true,
+      "**/.ruff_cache": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-toolsai.jupyter",
+      "ms-python.python",
+      "anthropic.claude-code"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": []
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "copilot: open notebook + claude",
+        "dependsOrder": "parallel",
+        "dependsOn": ["copilot: notebook", "copilot: claude"],
+        "problemMatcher": []
+      },
+      {
+        "label": "copilot: notebook",
+        "type": "shell",
+        "command": "code",
+        "args": ["${workspaceFolder}/docs/projects/copilot/copilot.ipynb"],
+        "presentation": { "group": "copilot", "reveal": "silent" },
+        "problemMatcher": []
+      },
+      {
+        "label": "copilot: claude",
+        "type": "shell",
+        "command": "claude",
+        "options": { "cwd": "${workspaceFolder}" },
+        "presentation": {
+          "group": "copilot",
+          "reveal": "always",
+          "panel": "dedicated",
+          "focus": true
+        },
+        "problemMatcher": []
+      }
+    ]
+  }
+}
