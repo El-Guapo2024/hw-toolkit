@@ -26,7 +26,7 @@ from typing import Optional
 
 import sexpdata
 
-from hw_agent.artifacts.schematics.kicad_paths import kicad_cli
+from hw_toolkit.kicad.kicad_paths import kicad_cli
 
 
 # ─── S-expression helpers (local — kicad_lib's are private) ────────────────

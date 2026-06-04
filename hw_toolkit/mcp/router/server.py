@@ -19,7 +19,7 @@ DSN export and SES import always run locally — they need the user's
 KiCad install (or pcbnew IPC). Only the *routing* step is dispatched.
 
 Run: router-mcp                   # via console script
-or:  python -m hw_agent.router_mcp
+or:  python -m hw_toolkit.mcp.router.server
 
 MCP config (.mcp.json):
     {"router": {"type": "stdio", "command": "router-mcp", "args": []}}
@@ -297,7 +297,7 @@ async def route_board(
 
 def main() -> None:
     """Console-script entry point — `router-mcp` (or
-    `python -m hw_agent.router_mcp`)."""
+    `python -m hw_toolkit.mcp.router.server`)."""
     mcp.run()
 
 

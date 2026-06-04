@@ -13,7 +13,7 @@ This split is intentional. The agent decides which MCP fits the task:
     automated CI / batch / headless                          → designer-mcp
 
 Run:    live-edit-mcp                          # via console script
-or:     python -m hw_agent.live_edit_mcp        # via module
+or:     python -m hw_toolkit.mcp.live_edit.server        # via module
 
 MCP config (.mcp.json):
     {
@@ -181,7 +181,7 @@ def _live_sch_render_after_edit(
     if not with_render:
         return None, None
     try:
-        from hw_agent.artifacts.schematics.render_focus import render_focused_png
+        from hw_toolkit.kicad.render_focus import render_focused_png
         r = render_focused_png(kicad_sch, zoom_to=zoom_to)
         return (
             f"\n_SVG: `{r.get('svg_path', '?')}` "
@@ -205,7 +205,7 @@ def live_list_symbols(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     try:
         syms = sch_ipc.list_symbols(Path(kicad_sch).resolve())
     except Exception as e:
@@ -225,7 +225,7 @@ def live_list_lines(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_lines(Path(kicad_sch).resolve())
 
 
@@ -237,7 +237,7 @@ def live_list_labels(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_labels(Path(kicad_sch).resolve())
 
 
@@ -249,7 +249,7 @@ def live_list_text(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_text(Path(kicad_sch).resolve())
 
 
@@ -261,7 +261,7 @@ def live_list_shapes(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_shapes(Path(kicad_sch).resolve())
 
 
@@ -273,7 +273,7 @@ def live_list_images(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_images(Path(kicad_sch).resolve())
 
 
@@ -285,7 +285,7 @@ def live_list_groups(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_groups(Path(kicad_sch).resolve())
 
 
@@ -297,7 +297,7 @@ def live_list_sheet_symbols(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_sheet_symbols(Path(kicad_sch).resolve())
 
 
@@ -311,7 +311,7 @@ def live_list_junctions(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_junctions(Path(kicad_sch).resolve())
 
 
@@ -323,7 +323,7 @@ def live_list_no_connects(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.list_no_connects(Path(kicad_sch).resolve())
 
 
@@ -374,7 +374,7 @@ def live_get_page_settings(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.get_page_settings(Path(kicad_sch).resolve())
 
 
@@ -386,7 +386,7 @@ def live_get_title_block(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.get_title_block(Path(kicad_sch).resolve())
 
 
@@ -399,7 +399,7 @@ def live_get_as_string(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.get_as_string(Path(kicad_sch).resolve())
 
 
@@ -412,7 +412,7 @@ def live_get_selection_as_string(kicad_sch: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.get_selection_as_string(Path(kicad_sch).resolve())
 
 
@@ -435,7 +435,7 @@ def live_add_wire(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.add_wire(Path(kicad_sch).resolve(),
                               x1_mm, y1_mm, x2_mm, y2_mm)
     md = (f"live_add_wire ({x1_mm},{y1_mm}) → ({x2_mm},{y2_mm}) — "
@@ -458,7 +458,7 @@ def live_add_bus(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.add_bus(Path(kicad_sch).resolve(),
                              x1_mm, y1_mm, x2_mm, y2_mm)
     md = (f"live_add_bus ({x1_mm},{y1_mm}) → ({x2_mm},{y2_mm}) — "
@@ -480,7 +480,7 @@ def live_add_junction(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.add_junction(Path(kicad_sch).resolve(), x_mm, y_mm)
     md = f"live_add_junction ({x_mm},{y_mm}) — {result.get('error', 'ok')}"
     svg_md, img = _live_sch_render_after_edit(
@@ -500,7 +500,7 @@ def live_add_no_connect(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.add_no_connect(Path(kicad_sch).resolve(), x_mm, y_mm)
     md = f"live_add_no_connect ({x_mm},{y_mm}) — {result.get('error', 'ok')}"
     svg_md, img = _live_sch_render_after_edit(
@@ -521,7 +521,7 @@ def live_add_text(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.add_text(Path(kicad_sch).resolve(), x_mm, y_mm, text)
     md = f"live_add_text ({x_mm},{y_mm}) {text!r} — {result.get('error', 'ok')}"
     svg_md, img = _live_sch_render_after_edit(
@@ -543,7 +543,7 @@ def live_add_label(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.add_label(Path(kicad_sch).resolve(), x_mm, y_mm, text)
     md = f"live_add_label ({x_mm},{y_mm}) {text!r} — {result.get('error', 'ok')}"
     svg_md, img = _live_sch_render_after_edit(
@@ -574,7 +574,7 @@ def live_move_symbol(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.move_symbol(Path(kicad_sch).resolve(), ref, x_mm, y_mm)
     md = (f"live_move_symbol `{ref}` → ({x_mm}, {y_mm}) — "
           f"{result.get('error', 'ok')}")
@@ -596,7 +596,7 @@ def live_set_value(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.set_value(Path(kicad_sch).resolve(), ref, value)
     md = f"live_set_value `{ref}`.value={value!r} — {result.get('error', 'ok')}"
     svg_md, img = _live_sch_render_after_edit(
@@ -617,7 +617,7 @@ def live_set_footprint(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.set_footprint(Path(kicad_sch).resolve(), ref, footprint)
     md = (f"live_set_footprint `{ref}`.footprint={footprint!r} — "
           f"{result.get('error', 'ok')}")
@@ -635,7 +635,7 @@ def live_set_page_settings(kicad_sch: str, paper: str) -> dict:
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.set_page_settings(Path(kicad_sch).resolve(), paper)
 
 
@@ -654,7 +654,7 @@ def live_set_title_block(
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     return sch_ipc.set_title_block(
         Path(kicad_sch).resolve(),
         title=title, company=company, revision=revision, date=date,
@@ -678,7 +678,7 @@ def live_save_schematic(kicad_sch: str, with_render: bool = False) -> list:
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.save_schematic(Path(kicad_sch).resolve())
     if result.get("ok"):
         md = "live_save_schematic: ok"
@@ -711,7 +711,7 @@ def live_save_as(
     """
     if not _ipc_up():
         return _live_unavailable()
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.save_as(
         Path(kicad_sch).resolve(), Path(new_path).resolve(),
         overwrite=overwrite, include_project=include_project,
@@ -775,7 +775,7 @@ def live_remove_by_id(
     """
     if not _ipc_up():
         return [_live_unavailable()]
-    from hw_agent.artifacts.schematics import sch_ipc
+    from hw_toolkit.kicad import sch_ipc
     result = sch_ipc.remove_by_id(Path(kicad_sch).resolve(), item_ids)
     md = (f"live_remove_by_id removed={result.get('removed', 0)} — "
           f"{result.get('error', 'ok')}")
