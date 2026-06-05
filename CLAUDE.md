@@ -35,17 +35,29 @@ board.net("VIN").connect("U1.1", "C1.1")   # nets via refs like "U1.1"
 board.i2c(...); board.spi(...); board.uart(...); board.can(...); board.swd(...); board.usbc(...)
 
 board.write_kicad()   # → .kicad_sch (ELK orthogonal layout, real symbols)
-board.show()          # inline SVG schematic (one-shot)
-board.live()          # self-refreshing SVG pane — re-renders on every file
-                      #   change; board.live(pcb=True) for the board
 board.write_pcb()     # → placed .kicad_pcb + ratsnest
-board.show_pcb()      # inline PCB SVG
 board.check_erc()     # ERC gate
+
+# Render — file is the source of truth; pick the canvas:
+board.serve_live()    # MVP DEFAULT — localhost KiCanvas page, auto-reloads on
+                      #   every write_kicad(); open in VS Code Simple Browser.
+                      #   board.serve_live(pcb=True) for the board.
+board.show_kicanvas() # one-shot in-browser WebGL render (no kicad-cli)
+board.live()          # Jupyter file-watch SVG pane (notebook variant)
+board.show()/show_pcb()  # one-shot inline SVG (universal fallback)
 ```
 
-`board.live()` is the **studio loop** (mirrors openscad-studio): drop ONE
-`view = board.live()` at the top of the session; thereafter every
-`write_kicad()` you run repaints that pane by itself — no repeated `show()`.
+**MVP render = file-as-truth + KiCanvas preview, NO KiCad fork** (locked
+2026-06-04). The studio loop (mirrors openscad-studio): start ONE
+`board.serve_live()`, open its URL in VS Code's Simple Browser, then every
+`write_kicad()` repaints that tab by itself — no repeated `show()`, no notebook
+needed. KiCanvas renders the file in-browser so there's no kicad-cli latency.
+
+Sync truth (no fork): our-edit→preview = live ✅; KiCad-save→preview = live ✅;
+our-edit→**existing** KiCad items via live-edit IPC = live today ✅; our-edit→
+**new** symbols in an open eeschema = blocked upstream (KiCad 10.99 IPC). For
+mirroring a human's UNSAVED eeschema, use `watch_kicad_ipc()` (Mode B). KiCad
+won't auto-reload a changed file on disk — it warns; use File→Reload.
 
 ## Hard rules (from the user's standing feedback)
 

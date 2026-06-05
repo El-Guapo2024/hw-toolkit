@@ -135,6 +135,17 @@ raw Agent SDK + OAuth (ToS). Per-user, local. Never centrally proxy OAuth.
 - **C. Keep name `hw-toolkit` / `hw_toolkit`.** MCP servers move IN → `hw_toolkit/mcp/`.
 - **D. Delete `hw_agent/`** once nothing imports it.
 - **E.** Consolidate first, product backend after.
+- **F. Render MVP = file-as-truth + KiCanvas preview, NO KiCad fork** (2026-06-04).
+  Best OpenSCAD agent UX (openscad-studio) avoids the stock GUI — embedded
+  viewer + file-watch. Mirror it: agent writes the file → KiCanvas (in-browser
+  WebGL, the openscad-wasm analog) renders it → preview auto-reloads.
+  `board.serve_live()` = localhost page opened in VS Code Simple Browser = the
+  MVP canvas (no notebook). Fork parked: KiCad ~1M LOC C++, the create-symbol-
+  over-IPC gap is upstream's roadmap (wait, get it free), two-master live edit
+  is a sync nightmare even with a fork. Revisit a fork ONLY for an L3 in-KiCad
+  wxWebView panel, post-PMF. Three render paths shipped (commit bfd0666):
+  `show_kicanvas` / `serve_live` (live_server) / `live` (live_render) +
+  Mode B `watch_kicad_ipc` (live_ipc). 148 tests.
 
 ## 8. Milestones (branch `consolidate`)
 1. **M1 Phase-0 cleanup** — gitignore caches, drop stray render artifacts. ✅
