@@ -8,7 +8,6 @@
       "name": "hw-toolkit",
       "source": "./plugin",
       "description": "Design electronics with hw_toolkit: Python schematic authoring, ELK orthogonal layout, live KiCanvas preview, ERC/DRC gates, PCB placement + ratsnest, autorouting, parts search. File-as-truth, conversation-first.",
-      "version": "0.1.0",
       "tags": ["hardware", "kicad", "ee", "pcb", "schematic"]
     }
   ]

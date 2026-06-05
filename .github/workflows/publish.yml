@@ -1,0 +1,40 @@
+name: Publish to PyPI
+
+# Tag-driven release: `git tag v0.1.0 && git push --tags` builds the wheel +
+# sdist and publishes hw_toolkit to PyPI via Trusted Publishing (OIDC) — no
+# stored token. Once published, the plugin's .mcp.json can drop the
+# `--from git+…@tag` pin to a plain `uvx designer-mcp`.
+#
+# One-time PyPI setup: pypi.org → project → Settings → Publishing → Add a
+# GitHub trusted publisher (owner/repo, workflow `publish.yml`, environment
+# `pypi`). Create the `pypi` environment in GitHub repo Settings → Environments.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write   # OIDC token for Trusted Publishing
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Build wheel + sdist
+        run: uv build
+
+      - name: Smoke-import the built wheel
+        run: uv run --no-project --with dist/*.whl -- python -c "import hw_toolkit; print(hw_toolkit.__name__, 'ok')"
+
+      - name: Publish to PyPI (OIDC, no token)
+        run: uv publish
