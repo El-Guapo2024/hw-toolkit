@@ -1,0 +1,8 @@
+{
+  "name": "hw-toolkit-plugin-node-deps",
+  "private": true,
+  "description": "Node deps for hw_toolkit's ELK orthogonal layout bridge (elkjs). Installed lazily into ${CLAUDE_PLUGIN_DATA} by the SessionStart hook.",
+  "dependencies": {
+    "elkjs": "^0.9.3"
+  }
+}

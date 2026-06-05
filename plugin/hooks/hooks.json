@@ -1,0 +1,22 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "diff -q \"${CLAUDE_PLUGIN_ROOT}/package.json\" \"${CLAUDE_PLUGIN_DATA}/package.json\" >/dev/null 2>&1 || (mkdir -p \"${CLAUDE_PLUGIN_DATA}\" && cp \"${CLAUDE_PLUGIN_ROOT}/package.json\" \"${CLAUDE_PLUGIN_DATA}/\" && cd \"${CLAUDE_PLUGIN_DATA}\" && npm install --no-audit --no-fund) || rm -f \"${CLAUDE_PLUGIN_DATA}/package.json\""
+          },
+          {
+            "type": "command",
+            "command": "command -v kicad-cli >/dev/null 2>&1 || [ -n \"$KICAD_CLI\" ] || echo 'hw-toolkit: kicad-cli not found on PATH. Install KiCad 9+ (macOS: brew install --cask kicad ; or https://www.kicad.org/download/), or set KICAD_CLI to the binary path.'"
+          },
+          {
+            "type": "command",
+            "command": "command -v node >/dev/null 2>&1 || echo 'hw-toolkit: node not found on PATH. ELK layout needs Node 18+ (macOS: brew install node ; or https://nodejs.org/).'"
+          }
+        ]
+      }
+    ]
+  }
+}
