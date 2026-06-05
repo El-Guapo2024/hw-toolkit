@@ -1,0 +1,38 @@
+{
+  "name": "hw-toolkit-copilot",
+  "displayName": "hw_toolkit copilot",
+  "description": "Two-pane EE copilot: notebook (left) + live KiCanvas preview (right) in VS Code.",
+  "version": "0.1.0",
+  "publisher": "hw-toolkit",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "hwToolkit.openCopilot",
+        "title": "hw_toolkit: Open Copilot (notebook + live preview)"
+      },
+      {
+        "command": "hwToolkit.showPreview",
+        "title": "hw_toolkit: Show Live Preview (right pane)"
+      }
+    ],
+    "configuration": {
+      "title": "hw_toolkit copilot",
+      "properties": {
+        "hwToolkit.previewPort": {
+          "type": "number",
+          "default": 8731,
+          "description": "Port that board.serve_live() listens on (the KiCanvas preview)."
+        },
+        "hwToolkit.notebookPath": {
+          "type": "string",
+          "default": "docs/projects/copilot/copilot.ipynb",
+          "description": "Workspace-relative path to the copilot notebook opened in the left pane."
+        }
+      }
+    }
+  }
+}
