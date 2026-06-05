@@ -30,13 +30,13 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 
-class LiveView:
-    """A self-refreshing SVG pane bound to a file on disk.
+class _LivePane:
+    """Base: a single Jupyter display slot that re-renders in place.
 
-    `render` returns SVG *bytes* for the current file; `to_html` wraps those
-    bytes into a displayable IPython object (reuses board's responsive HTML).
-    The view watches `watch_path`'s directory, and on any write to that file
-    (debounced) re-renders and updates the same display slot in place.
+    Holds the render→html pipeline, a stable `display_id`, debounce timer,
+    and the show/update/error plumbing. Subclasses supply the *trigger*
+    (file events for `LiveView`, an IPC poll for `LiveIpcView`) and call
+    `self._on_trigger()` when the source may have changed.
     """
 
     _counter = 0
@@ -45,52 +45,20 @@ class LiveView:
         self,
         render: Callable[[], bytes],
         to_html: Callable[[bytes], object],
-        watch_path: str | Path,
         *,
         debounce_s: float = 0.4,
     ) -> None:
         self._render = render
         self._to_html = to_html
-        self._path = Path(watch_path).resolve()
         self._debounce_s = debounce_s
-        LiveView._counter += 1
-        self._display_id = f"hwt-live-{LiveView._counter}"
+        _LivePane._counter += 1
+        self._display_id = f"hwt-live-{_LivePane._counter}"
         self._timer: threading.Timer | None = None
         self._lock = threading.Lock()
-        self._observer: Observer | None = None
         self._started = False
 
-    # -- public ----------------------------------------------------------
-    def start(self) -> "LiveView":
-        """Render once, show the pane, and begin watching the file."""
-        self._show(first=True)
-        handler = _Handler(self._path.name, self._on_event)
-        obs = Observer()
-        obs.schedule(handler, str(self._path.parent), recursive=False)
-        obs.daemon = True
-        obs.start()
-        self._observer = obs
-        self._started = True
-        return self
-
-    def stop(self) -> None:
-        """Stop watching (pane keeps its last render)."""
-        if self._timer is not None:
-            self._timer.cancel()
-            self._timer = None
-        if self._observer is not None:
-            self._observer.stop()
-            self._observer.join(timeout=2)
-            self._observer = None
-        self._started = False
-
-    def refresh(self) -> None:
-        """Force an immediate re-render (bypass file watch)."""
-        self._show(first=False)
-
-    # -- internals -------------------------------------------------------
-    def _on_event(self) -> None:
-        # Debounce: KiCad writes the file in bursts; collapse to one render.
+    # -- trigger → debounced render -------------------------------------
+    def _on_trigger(self) -> None:
         with self._lock:
             if self._timer is not None:
                 self._timer.cancel()
@@ -117,6 +85,62 @@ class LiveView:
         from IPython.display import HTML, update_display
 
         update_display(HTML(f"<pre>{msg}</pre>"), display_id=self._display_id)
+
+    def refresh(self) -> None:
+        """Force an immediate re-render (bypass the trigger)."""
+        self._show(first=False)
+
+    def _cancel_timer(self) -> None:
+        if self._timer is not None:
+            self._timer.cancel()
+            self._timer = None
+
+
+class LiveView(_LivePane):
+    """A self-refreshing SVG pane bound to a file on disk.
+
+    `render` returns SVG *bytes* for the current file; `to_html` wraps those
+    bytes into a displayable IPython object (reuses board's responsive HTML).
+    The view watches `watch_path`'s directory, and on any write to that file
+    (debounced) re-renders and updates the same display slot in place.
+    """
+
+    def __init__(
+        self,
+        render: Callable[[], bytes],
+        to_html: Callable[[bytes], object],
+        watch_path: str | Path,
+        *,
+        debounce_s: float = 0.4,
+    ) -> None:
+        super().__init__(render, to_html, debounce_s=debounce_s)
+        self._path = Path(watch_path).resolve()
+        self._observer: Observer | None = None
+
+    # Back-compat alias: the file handler calls _on_event → base _on_trigger.
+    def _on_event(self) -> None:
+        self._on_trigger()
+
+    def start(self) -> "LiveView":
+        """Render once, show the pane, and begin watching the file."""
+        self._show(first=True)
+        handler = _Handler(self._path.name, self._on_event)
+        obs = Observer()
+        obs.schedule(handler, str(self._path.parent), recursive=False)
+        obs.daemon = True
+        obs.start()
+        self._observer = obs
+        self._started = True
+        return self
+
+    def stop(self) -> None:
+        """Stop watching (pane keeps its last render)."""
+        self._cancel_timer()
+        if self._observer is not None:
+            self._observer.stop()
+            self._observer.join(timeout=2)
+            self._observer = None
+        self._started = False
 
     def __repr__(self) -> str:
         state = "watching" if self._started else "stopped"

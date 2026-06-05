@@ -1200,6 +1200,46 @@ class Board:
         )
         return LiveView(render, to_html, path).start()
 
+    def show_kicanvas(
+        self, *, pcb: bool = False, controls: str = "basic", height_px: int = 500
+    ) -> Any:
+        """Render inline with KiCanvas — in-browser WebGL, no kicad-cli.
+
+        The openscad-wasm analog: parses the `.kicad_sch` (or `.kicad_pcb`)
+        text in the browser, so it's instant and interactive (pan/zoom). The
+        file stays the source of truth — we just embed its text. Needs a host
+        that runs module scripts (VS Code / JupyterLab / web); falls back to
+        `show()` (SVG) anywhere sandboxed.
+        """
+        from hw_toolkit.kicad.kicanvas import kicanvas_html
+
+        if pcb:
+            self.write_pcb()
+            text = self.pcb_path.read_text()
+            kind = "pcb"
+        else:
+            self.write_kicad(overwrite=True)
+            text = self.sch_path.read_text()
+            kind = "schematic"
+        return kicanvas_html(
+            text, type=kind, controls=controls, height_px=height_px
+        )
+
+    def serve_live(self, *, pcb: bool = False, port: int = 8731) -> Any:
+        """Live preview in a VS Code tab (no notebook). Writes the file, starts
+        a localhost KiCanvas server that auto-reloads on change, and prints the
+        URL to open in VS Code's Simple Browser. Returns the `LiveServer`.
+        """
+        from hw_toolkit.kicad.live_server import serve_live as _serve
+
+        if pcb:
+            self.write_pcb()
+            path = self.pcb_path
+        else:
+            self.write_kicad(overwrite=True)
+            path = self.sch_path
+        return _serve(path, port=port)
+
     # ----------------------------------------------------- final artifact
     def export_kicad(
         self,
