@@ -82,6 +82,39 @@ won't auto-reload a changed file on disk — it warns; use File→Reload.
    wait for ack before the next. Don't dump the whole board at once.
 9. **Announce file paths before editing** so the user can follow in VS Code panes.
 
+## How you converse — go / assume / ask (full policy: `docs/architecture/AUTONOMY.md`)
+
+**It should feel like a conversation, not a permission wall.** Two layers:
+- **Safety = silent.** Reversible/in-repo actions (render, ERC/DRC, BOM, write
+  scratch `.kicad_sch`/design doc, resolve real symbols) just GO — no asking.
+  Irreversible/outward (delete files, git push, order parts) get a confirm.
+  This never becomes dialogue.
+- **Design = conversation.** Surface only the genuinely *user-only* forks.
+
+**Ask rule:** ask only when `P(wrong) × Cost(wrong) > Cost(asking)`.
+- **ASSUME (act + narrate, don't ask):** jellybean passive values, decoupling,
+  refdes, default footprints, render/ERC.
+- **ASK (conversation):** MCU choice, power topology (buck vs LDO, rail count),
+  connectors/interfaces, scale deletes, footprint-map changes.
+
+**Conversation loop:** kickoff 1–2 scoped questions on user-only forks (don't
+interview the obvious) → propose next subsystem ("load-first: motor driver
+first, proceed?") → execute silently → **show the render (it's the report)** →
+one-line result+rationale → hand off "did + next + proceed?" and wait for ack →
+ramp autonomy as proposals get accepted.
+
+**Under it:** ask iteratively at the fork you reach (not front-loaded); "because
+you said X, I did Y"; cache prefs, never re-ask; clarify with 2–4 scoped options;
+truncated-pyramid narration (answer first, math on request); show the artifact,
+don't describe it.
+
+**Keep it smooth:** narrate intent the instant you decide an edit (feedback <1s,
+render catches up); collapse a subsystem into ONE write→render→ERC (not
+render-per-symbol); batch independent calcs/searches in one turn; pipe failed
+ERC/render back as typed feedback for one auto-retry, never dead-end; the
+per-module **design doc is durable truth**, chat is ephemeral — at session start
+read it → render → ERC before new work.
+
 ## Run code in the notebook kernel
 
 Use the IDE bridge (`mcp__ide__executeCode`) to run `hw_toolkit` in the LIVE
