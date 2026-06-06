@@ -1,16 +1,28 @@
 #!/usr/bin/env bash
-# hw-toolkit SessionStart: wire [HW-AGENT] into the status line, non-destructively.
+# hw-toolkit: wire [HW-AGENT] into the status line, non-destructively.
+#
+# OPT-IN ONLY. Editing the global settings.json statusLine would make the badge
+# appear across every Claude session/agent, not just hw-toolkit work — so this
+# stays OFF by default. Enable it deliberately, one of:
+#   • export HW_STATUSLINE=1
+#   • touch ~/.claude/hw-toolkit/statusline.enabled
+# Disable: unset the env / remove the flag, then restore the prior statusLine
+# from ~/.claude/hw-toolkit/prev_statusline.
 #
 # Plugins can't ship a statusLine via their manifest — it lives in settings.json.
-# So on session start we point settings.json's statusLine at our prepend script,
-# saving whatever was there before so statusline.sh can chain through it. Idempotent:
-# if ours is already wired, we touch nothing.
+# When enabled, we point statusLine at our prepend script, saving the prior one
+# so statusline.sh can chain through it. Idempotent.
 set -uo pipefail
 
 config_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 settings="$config_dir/settings.json"
 state_dir="$config_dir/hw-toolkit"
 prev_file="$state_dir/prev_statusline"
+
+# Gate: do nothing unless the engineer opted in.
+if [ -z "${HW_STATUSLINE:-}" ] && [ ! -f "$state_dir/statusline.enabled" ]; then
+    exit 0
+fi
 # Resolve to an absolute command now (CLAUDE_PLUGIN_ROOT is set in hook context,
 # but NOT when Claude later runs the statusLine command from settings.json).
 ours="bash \"${CLAUDE_PLUGIN_ROOT}/hooks/statusline.sh\""
