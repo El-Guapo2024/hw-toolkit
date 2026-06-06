@@ -27,18 +27,20 @@ except Exception:
     s = {}
 parts = []
 proj = s.get("project")
+mode = s.get("mode", "design")
 if proj:
     parts.append(str(proj))
-mode = s.get("mode", "design")
-if mode == "planning":
+    if mode == "planning":
+        parts.append("planning")
+    else:
+        parts.append(str(s.get("phase", "schematic")))
+        erc = s.get("erc_clean")
+        if erc is True:
+            parts.append("ERC ✓")
+        elif erc is False:
+            parts.append("ERC ✗")
+elif mode == "planning":
     parts.append("planning")
-else:
-    parts.append(str(s.get("phase", "schematic")))
-    erc = s.get("erc_clean")
-    if erc is True:
-        parts.append("ERC ✓")
-    elif erc is False:
-        parts.append("ERC ✗")
 print("[HW-AGENT" + (" " + " · ".join(parts) if parts else "") + "]")
 PY
 )"
