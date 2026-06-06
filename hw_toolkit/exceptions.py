@@ -167,6 +167,30 @@ class LayoutError(HwToolkitError):
         return f"LayoutError({self.reason}){tail}"
 
 
+# ---------------------------------------------------------------------------
+# HITL session-mode failures
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class PlanningModeError(HwToolkitError):
+    """A committing write (`write_kicad`/`write_pcb`) was attempted while the
+    session is in **planning** mode.
+
+    Planning mode is the read-only persona (serena-style): the engineer asked
+    to explore options, so authoring writes are physically blocked — you can
+    still render and ERC-check the existing board. Switch with
+    `hw.design()` (or `hw.set_mode("design")`) to author.
+    """
+    action: str
+
+    def __str__(self) -> str:
+        return (
+            f"PlanningModeError: {self.action} blocked — session is in "
+            f"planning mode. Call hw.design() to author."
+        )
+
+
 @dataclass
 class DRCViolation(HwToolkitError):
     type: str

@@ -67,3 +67,19 @@ preferences, never re-ask; 2–4 scoped options when you do ask.
 into ONE write → render → ERC (not per-symbol); batch independent calcs in one
 turn; the per-module design doc is durable truth — at session start read it →
 render → ERC before new work.
+
+## Planning vs design mode (HITL enforcement)
+
+Session state lives in `~/.claude/.hw-state` (shared with the status line, which
+shows `[HW-AGENT <project> · <phase> · ERC ✓]`). Two modes gate authoring:
+
+- **design** (default) — authoring allowed.
+- **planning** — `board.write_kicad()` / `write_pcb()` **raise `PlanningModeError`**;
+  rendering (`show()`/`svg`) and `check_erc()` still work. Use when the engineer
+  is exploring options and you must not commit parts.
+
+Toggle: `hw.planning()` / `hw.design()` in the kernel, or the engineer says
+"explore options" / "just show me" (→ planning) or "go ahead" / "build it"
+(→ design) — the UserPromptSubmit hook flips the flag. When you hit
+`PlanningModeError`, don't fight it: present the proposal and ask to switch to
+design mode. The hook re-injects the active mode + hard rules every turn.

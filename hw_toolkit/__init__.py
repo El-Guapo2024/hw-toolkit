@@ -66,8 +66,14 @@ from hw_toolkit.exceptions import (  # noqa: E402
     HwToolkitError,
     MultipleDRCViolations,
     MultipleERCViolations,
+    PlanningModeError,
     RoutingFailedError,
     UnknownSubsystemError,
+)
+from hw_toolkit.state import (  # noqa: E402
+    current_mode,
+    read_state,
+    set_mode,
 )
 from hw_toolkit.kicad import (  # noqa: E402
     KiCadCliMissingError,
@@ -76,10 +82,27 @@ from hw_toolkit.kicad import (  # noqa: E402
     NoSvgProducedError,
 )
 
+def planning():
+    """Enter planning mode — block committing writes (`write_kicad`/`write_pcb`)
+    so the engineer can explore options. Rendering + ERC still work."""
+    return set_mode("planning")
+
+
+def design():
+    """Enter design mode (default) — authoring writes allowed."""
+    return set_mode("design")
+
+
 __all__ = [
     "Board",
     "Module",
     "Net",
+    "planning",
+    "design",
+    "set_mode",
+    "current_mode",
+    "read_state",
+    "PlanningModeError",
     "ERC_BASELINE_CODES",
     "ERC_REAL_SYMBOL_CODES",
     "calc",

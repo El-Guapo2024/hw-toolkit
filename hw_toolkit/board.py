@@ -42,6 +42,7 @@ from hw_toolkit.exceptions import (
     EmptyNetError,
     ERCViolation,
     MultipleERCViolations,
+    PlanningModeError,
     UnknownSubsystemError,
 )
 from hw_toolkit.kicad import erc_json, mark_scratch, render_sch_svg, write_populated
@@ -1094,9 +1095,20 @@ class Board:
         return self.kicad_dir / f"{self.project_id}.kicad_pro"
 
     # ------------------------------------------------------------ schematic
-    def write_kicad(self, *, overwrite: bool = True) -> SchematicPlan:
+    def write_kicad(
+        self, *, overwrite: bool = True, _allow_in_planning: bool = False
+    ) -> SchematicPlan:
         """Populate the `.kicad_sch` from current state. Returns the plan
-        that was applied (useful for inspection)."""
+        that was applied (useful for inspection).
+
+        Blocked with `PlanningModeError` when the session is in planning
+        mode — switch with `hw.design()`. Internal render/check callers pass
+        `_allow_in_planning=True` so viewing the board still works.
+        """
+        from hw_toolkit import state as _state
+
+        if not _allow_in_planning and _state.current_mode() == "planning":
+            raise PlanningModeError(action="write_kicad")
         write_populated(self.bundle, self.sch_path, overwrite=overwrite)
         # Sync the project-local lib tables so kicad-cli ERC + eeschema can
         # resolve `hwagent:<symbol>` references in this sheet.
@@ -1106,13 +1118,14 @@ class Board:
         flt = self.kicad_dir / "fp-lib-table"
         if not flt.exists():
             flt.write_text(_PROJECT_FP_LIB_TABLE, encoding="utf-8")
+        _state.write_state(project=self.project_id, phase="schematic")
         return plan_schematic(self.bundle, self.sch_path)
 
     @property
     def svg(self) -> bytes:
         """Render the full schematic to SVG bytes (in scratch). Pure
         property — kept in /tmp, no engineer-visible folder writes."""
-        self.write_kicad(overwrite=True)
+        self.write_kicad(overwrite=True, _allow_in_planning=True)
         path = render_sch_svg(self.sch_path)
         return path.read_bytes()
 
@@ -1141,9 +1154,14 @@ class Board:
         NOT routed here; open in pcbnew or run the autorouter for traces.
         """
         from hw_toolkit.kicad.pcb import write_pcb as _write_pcb
+        from hw_toolkit import state as _state
 
-        self.write_kicad(overwrite=True)
-        return _write_pcb(self.sch_path, self.pcb_path)
+        if _state.current_mode() == "planning":
+            raise PlanningModeError(action="write_pcb")
+        self.write_kicad(overwrite=True, _allow_in_planning=True)
+        result = _write_pcb(self.sch_path, self.pcb_path)
+        _state.write_state(project=self.project_id, phase="pcb")
+        return result
 
     @property
     def pcb_svg(self) -> bytes:
@@ -1354,10 +1372,13 @@ class Board:
         If `autowrite=True` (default) and the .kicad_sch is missing or
         stale, it's regenerated first.
         """
+        from hw_toolkit import state as _state
+
         if autowrite or not self.sch_path.exists():
-            self.write_kicad(overwrite=True)
+            self.write_kicad(overwrite=True, _allow_in_planning=True)
         report_path = erc_json(self.sch_path)
         erc = parse_erc_report(report_path, expected_codes=expected_codes)
+        _state.write_state(project=self.project_id, erc_clean=erc.clean)
         if erc.clean:
             return
         raise MultipleERCViolations(
