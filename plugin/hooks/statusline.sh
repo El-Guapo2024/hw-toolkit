@@ -17,6 +17,21 @@ config_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 state_file="$config_dir/.hw-state"
 prev_file="$config_dir/hw-toolkit/prev_statusline"
 
+# Per-session gate: render the [HW-AGENT] badge ONLY when this session opted in
+# (env var set in the shell that launched `claude`, e.g. `HW_STATUSLINE=1 claude`).
+# Without it, pass the prior status line through verbatim — zero badge, so the
+# global wiring is invisible to every other session.
+_emit_prev() {
+  if [ -f "$prev_file" ]; then
+    prev="$(cat "$prev_file")"
+    [ -n "$prev" ] && printf '%s' "$input" | eval "$prev" 2>/dev/null
+  fi
+}
+if [ -z "${HW_STATUSLINE:-}" ]; then
+  _emit_prev
+  exit 0
+fi
+
 # Build the badge from the state file (tiny flat JSON; python parse is fine).
 badge="$(
   HW_STATE="$state_file" python3 - <<'PY' 2>/dev/null || printf '[HW-AGENT]'
