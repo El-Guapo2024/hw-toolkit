@@ -14,6 +14,10 @@
           {
             "type": "command",
             "command": "command -v node >/dev/null 2>&1 || echo 'hw-toolkit: node not found on PATH. ELK layout needs Node 18+ (macOS: brew install node ; or https://nodejs.org/).'"
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/install-statusline.sh\""
           }
         ]
       }
