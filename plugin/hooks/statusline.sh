@@ -25,6 +25,11 @@ try:
     s = json.load(open(os.environ["HW_STATE"]))
 except Exception:
     s = {}
+Y = "\033[93m"   # bright yellow — the hw-toolkit color
+G = "\033[92m"   # green  (ERC clean)
+R = "\033[91m"   # red    (ERC failing)
+X = "\033[0m"    # reset
+
 parts = []
 proj = s.get("project")
 mode = s.get("mode", "design")
@@ -36,12 +41,13 @@ if proj:
         parts.append(str(s.get("phase", "schematic")))
         erc = s.get("erc_clean")
         if erc is True:
-            parts.append("ERC ✓")
+            parts.append(f"{G}ERC ✓{X}{Y}")
         elif erc is False:
-            parts.append("ERC ✗")
+            parts.append(f"{R}ERC ✗{X}{Y}")
 elif mode == "planning":
     parts.append("planning")
-print("[HW-AGENT" + (" " + " · ".join(parts) if parts else "") + "]")
+inner = (" " + " · ".join(parts)) if parts else ""
+print(f"{Y}[HW-AGENT{inner}]{X}")
 PY
 )"
 [ -n "$badge" ] || badge="[HW-AGENT]"
