@@ -3,7 +3,7 @@
   "description": "EE design copilot — schematic authoring (hw_toolkit), ERC/DRC gates, ELK orthogonal layout, live KiCanvas preview, autorouting, parts search. File-as-truth, conversation-first.",
   "version": "0.1.0",
   "author": { "name": "Juan Antonio Luera", "email": "luera.juanantonio@gmail.com" },
-  "homepage": "https://github.com/ORG/hw-toolkit",
-  "repository": "https://github.com/ORG/hw-toolkit",
+  "homepage": "https://github.com/El-Guapo2024/hw-toolkit",
+  "repository": "https://github.com/El-Guapo2024/hw-toolkit",
   "license": "MIT"
 }

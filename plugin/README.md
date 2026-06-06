@@ -34,16 +34,17 @@ SessionStart hook prints a hint if either is missing.
 ## Install
 
 ```
-/plugin marketplace add https://github.com/ORG/hw-toolkit
+/plugin marketplace add https://github.com/El-Guapo2024/hw-toolkit
 /plugin install hw-toolkit
 ```
 
 (For local dev: `/plugin marketplace add /path/to/hw-toolkit` — the repo root is
 the marketplace, serving `./plugin`.)
 
-Then ask the copilot to design a board. Pre-PyPI, the `.mcp.json` pins the
-server to a git tag (`uvx --from git+…@v0.1.0`); once `hw_toolkit` is on PyPI it
-becomes a plain `uvx designer-mcp`.
+Then ask the copilot to design a board. Pre-PyPI, the `.mcp.json` launches the
+server straight from git (`uvx --from git+… designer-mcp`, unpinned — tracks the
+default branch, same as the official `serena` plugin); once `hw_toolkit` is on
+PyPI it becomes a plain `uvx designer-mcp`.
 
 ## Notes
 

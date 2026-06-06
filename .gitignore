@@ -50,3 +50,6 @@ docs/projects/test_*/
 tools/elk/node_modules/
 tools/elk/package-lock.json
 .ruff_cache/
+
+# Jupyter autosave junk
+.ipynb_checkpoints/

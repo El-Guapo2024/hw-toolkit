@@ -2,7 +2,7 @@
   "mcpServers": {
     "designer": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/ORG/hw-toolkit@v0.1.0", "designer-mcp"],
+      "args": ["--from", "git+https://github.com/El-Guapo2024/hw-toolkit", "designer-mcp"],
       "env": {
         "KICAD_CLI": "${KICAD_CLI}",
         "ELK_NODE_PATH": "${CLAUDE_PLUGIN_DATA}/node_modules"
@@ -10,11 +10,11 @@
     },
     "router": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/ORG/hw-toolkit@v0.1.0", "router-mcp"]
+      "args": ["--from", "git+https://github.com/El-Guapo2024/hw-toolkit", "router-mcp"]
     },
     "live-edit": {
       "command": "uvx",
-      "args": ["--from", "git+https://github.com/ORG/hw-toolkit@v0.1.0", "live-edit-mcp"],
+      "args": ["--from", "git+https://github.com/El-Guapo2024/hw-toolkit", "live-edit-mcp"],
       "env": { "KICAD_CLI": "${KICAD_CLI}" }
     }
   }
